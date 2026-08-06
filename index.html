@@ -71,6 +71,22 @@
       text-align: right;
     }
 
+    #mute-toggle {
+      background: transparent;
+      border: 1px solid currentColor;
+      color: inherit;
+      font: inherit;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-size: 11px;
+      padding: 4px 9px;
+      border-radius: 4px;
+      cursor: pointer;
+      opacity: 0.8;
+      white-space: nowrap;
+    }
+    #mute-toggle:hover { opacity: 1; }
+
     #game-wrap {
       position: relative;
       min-height: 0;
@@ -297,6 +313,7 @@
   <main id="shell">
     <header id="topbar">
       <div>RV THERE YET?</div>
+      <button id="mute-toggle" type="button" aria-label="Toggle music">&#128266; MUSIC ON</button>
       <small>WASD / ARROWS TO MOVE · E / SPACE TO INTERACT</small>
     </header>
 
@@ -568,6 +585,110 @@
       return score;
     }
 
+    // ---------------------------------------------------------------------
+    // Music. Five tracks total, mapped across every scene. Loaded once in
+    // TitleScene's preload() and cached for the rest of the game session.
+    // If a track file isn't present (e.g. this file was shared without the
+    // audio/ folder), everything degrades silently \u2014 no crash, no missing
+    // asset noise, the game just plays without music.
+    // ---------------------------------------------------------------------
+    const MUSIC_FILES = {
+      main: 'audio/theme-main.mp3',
+      highway: 'audio/theme-highway.mp3',
+      cozy: 'audio/theme-cozy.mp3',
+      chapterComplete: 'audio/jingle-chapter-complete.mp3',
+      finale: 'audio/theme-finale.mp3'
+    };
+
+    function preloadMusic(scene) {
+      Object.entries(MUSIC_FILES).forEach(([key, path]) => {
+        if (scene.cache.audio.exists(key)) return;
+        scene.load.audio(key, [path], { xhrSettings: { timeout: 1500 } });
+      });
+      scene.load.on('loaderror', (file) => {
+        if (MUSIC_FILES[file.key]) {
+          // Missing/renamed audio file \u2014 note it once, keep the game silent-safe.
+          console.warn(`[music] Could not load "${file.key}" from ${MUSIC_FILES[file.key]}. Music will be skipped for this track.`);
+        }
+      });
+    }
+
+    let currentMusic = null;
+    let currentMusicKey = null;
+
+    function musicAvailable(scene, key) {
+      return Boolean(scene.cache.audio.exists(key));
+    }
+
+    // Crossfades from whatever's currently playing to `key`. Safe to call
+    // every time a scene starts \u2014 it no-ops if that track is already playing.
+    function playMusic(scene, key, options = {}) {
+      const { loop = true, volume = 0.5, fadeMs = 650 } = options;
+      if (currentMusicKey === key && currentMusic && currentMusic.isPlaying) return;
+      const outgoing = currentMusic;
+      if (outgoing) {
+        scene.tweens.add({
+          targets: outgoing, volume: 0, duration: fadeMs,
+          onComplete: () => outgoing.stop()
+        });
+      }
+      currentMusic = null;
+      currentMusicKey = key;
+      if (!musicAvailable(scene, key)) return;
+      const incoming = scene.sound.add(key, { loop, volume: 0 });
+      incoming.play();
+      scene.tweens.add({ targets: incoming, volume, duration: fadeMs });
+      currentMusic = incoming;
+      if (!loop) {
+        incoming.once('complete', () => {
+          if (currentMusic === incoming) { currentMusic = null; currentMusicKey = null; }
+        });
+      }
+    }
+
+    function stopMusic(scene, fadeMs = 500) {
+      if (!currentMusic) return;
+      const outgoing = currentMusic;
+      scene.tweens.add({ targets: outgoing, volume: 0, duration: fadeMs, onComplete: () => outgoing.stop() });
+      currentMusic = null;
+      currentMusicKey = null;
+    }
+
+    const MUSIC_MUTE_KEY = 'rvThereYet:musicMuted:v1';
+
+    // Wires the DOM mute button (outside the canvas, in the page header) to
+    // Phaser's global sound manager. Lives outside any scene since it needs
+    // to work immediately, before the game has even booted.
+    function initMuteToggle() {
+      const btn = document.getElementById('mute-toggle');
+      if (!btn) return;
+      let muted = safeStorageGet(MUSIC_MUTE_KEY) === '1';
+
+      const render = () => {
+        btn.textContent = muted ? '\u{1F507} MUSIC OFF' : '\u{1F50A} MUSIC ON';
+      };
+      render();
+
+      const applyToGame = () => {
+        if (gameInstance && gameInstance.sound) gameInstance.sound.mute = muted;
+      };
+
+      btn.addEventListener('click', () => {
+        muted = !muted;
+        safeStorageSet(MUSIC_MUTE_KEY, muted ? '1' : '0');
+        render();
+        applyToGame();
+      });
+
+      // Sound manager doesn't exist until Phaser.Game is constructed further
+      // down this script; poll briefly so an early click still lands right.
+      const waitForSound = () => {
+        if (gameInstance && gameInstance.sound) { applyToGame(); return; }
+        setTimeout(waitForSound, 150);
+      };
+      waitForSound();
+    }
+
     const touchState = {
       up: false,
       down: false,
@@ -749,10 +870,15 @@
     class TitleScene extends Phaser.Scene {
       constructor() { super('Title'); }
 
+      preload() {
+        preloadMusic(this);
+      }
+
       create() {
         document.getElementById('loading').style.display = 'none';
         this.cameras.main.setBackgroundColor('#15131f');
         this.makeTitleArt();
+        playMusic(this, 'main');
 
         const title = pixelText(this, GAME_W / 2, 95, 'RV THERE YET?', 48, '#f4c95d')
           .setOrigin(0.5)
@@ -883,6 +1009,7 @@
       create() {
         ensureTripTextures(this);
         this.cameras.main.setBackgroundColor('#15131f');
+        playMusic(this, 'main');
         this.selected = null;
         this.cards = [];
 
@@ -1009,6 +1136,7 @@
       }
 
       create() {
+        playMusic(this, 'main');
         this.createTextures();
         this.createWorld();
         this.createCharacters();
@@ -1878,6 +2006,7 @@
         this.worldH = options.worldH || WORLD_H;
         this.createAdventureUI(options.title || 'ROAD TRIP OBJECTIVE');
         this.configureAdventureInput();
+        playMusic(this, options.musicKey || 'main');
       }
 
       configureAdventureInput() {
@@ -2256,7 +2385,7 @@ CARS · CONES · POTHOLES: DODGE`, 11, '#f7f1dc')
       constructor() { super('Highway'); }
 
       create() {
-        this.setupAdventure({ title: 'CHAPTER 2 · INTERSTATE DIPLOMACY', worldW: 960, worldH: 3900 });
+        this.setupAdventure({ title: 'CHAPTER 2 · INTERSTATE DIPLOMACY', worldW: 960, worldH: 3900, musicKey: 'highway' });
         this.startY = 3700;
         this.finishY = 230;
         this.routeIndex = 0;
@@ -2488,7 +2617,7 @@ CARS · CONES · POTHOLES: DODGE`, 11, '#f7f1dc')
       constructor() { super('Wilds'); }
 
       create() {
-        this.setupAdventure({ title: 'CHAPTER 3 · THE WILDS', worldW: 1600, worldH: 1050 });
+        this.setupAdventure({ title: 'CHAPTER 3 · THE WILDS', worldW: 1600, worldH: 1050, musicKey: 'main' });
         this.state = { checkedIn: false, camera: false, photos: new Set(), hat: false, ranger: false, markers: 0 };
         this.drawReserve();
         this.createPlayerAndCamera(410, 850);
@@ -2670,7 +2799,7 @@ CARS · CONES · POTHOLES: DODGE`, 11, '#f7f1dc')
       constructor() { super('Glamping'); }
 
       create() {
-        this.setupAdventure({ title: 'CHAPTER 4 · GLAMPING', worldW: 1500, worldH: 1000 });
+        this.setupAdventure({ title: 'CHAPTER 4 · GLAMPING', worldW: 1500, worldH: 1000, musicKey: 'cozy' });
         this.state = { bags: 0, chartMade: false, bedsEscorted: 0, dinner: false, stars: false, noise: false, fireflies: 0 };
         this.bedChartActive = false;
         this.drawGlamping();
@@ -2875,7 +3004,7 @@ CARS · CONES · POTHOLES: DODGE`, 11, '#f7f1dc')
       constructor() { super('Campground'); }
 
       create() {
-        this.setupAdventure({ title: 'CHAPTER 5 · CAMPGROUND', worldW: 1550, worldH: 1000 });
+        this.setupAdventure({ title: 'CHAPTER 5 · CAMPGROUND', worldW: 1550, worldH: 1000, musicKey: 'cozy' });
         this.state = { parked: false, power: false, water: false, fire: false, quiet: false, marshmallows: 0 };
         this.drawCampground();
         this.createCampgroundPlayer();
@@ -3049,7 +3178,7 @@ CARS · CONES · POTHOLES: DODGE`, 11, '#f7f1dc')
       constructor() { super('Zoo'); }
 
       create() {
-        this.setupAdventure({ title: 'CHAPTER 6 · COLUMBUS ZOO', worldW: 1800, worldH: 1200 });
+        this.setupAdventure({ title: 'CHAPTER 6 · COLUMBUS ZOO', worldW: 1800, worldH: 1200, musicKey: 'main' });
         this.state = { map: false, stamps: new Set(), fed: false, backpack: false, giftShop: false, photos: 0 };
         this.drawZoo();
         this.createZooPlayer();
@@ -3227,7 +3356,7 @@ CARS · CONES · POTHOLES: DODGE`, 11, '#f7f1dc')
       constructor() { super('Homeward'); }
 
       create() {
-        this.setupAdventure({ title: 'CHAPTER 7 · THE DRIVE HOME', worldW: 960, worldH: 4100 });
+        this.setupAdventure({ title: 'CHAPTER 7 · THE DRIVE HOME', worldW: 960, worldH: 4100, musicKey: 'highway' });
         this.startY = 3900;
         this.finishY = 235;
         this.routeIndex = 0;
@@ -3498,6 +3627,7 @@ CARS · CONES · POTHOLES: DODGE`, 11, '#f7f1dc')
         ensureTripTextures(this);
         this.ready = false;
         this.cameras.main.setBackgroundColor('#15131f');
+        playMusic(this, 'chapterComplete', { loop: false, volume: 0.6, fadeMs: 400 });
         const g = this.add.graphics();
         g.fillStyle(0x262237, 1).fillRect(0, 0, GAME_W, GAME_H);
         g.fillStyle(0x403e49, 1).fillRect(0, 345, GAME_W, 195);
@@ -3624,6 +3754,7 @@ CARS · CONES · POTHOLES: DODGE`, 11, '#f7f1dc')
 
       create() {
         this.ready = false;
+        playMusic(this, 'finale', { volume: 0.55 });
         const g = this.add.graphics();
         g.fillStyle(0x17131d, 1).fillRect(0, 0, GAME_W, GAME_H);
         const stripes = [0x3a3550, 0x5a4660, 0x85576a, 0xc27b68];
@@ -3721,6 +3852,7 @@ CARS · CONES · POTHOLES: DODGE`, 11, '#f7f1dc')
     };
 
     installTouchControls();
+    initMuteToggle();
 
     if (!window.Phaser) {
       document.getElementById('loading').innerHTML = '<div><strong>PHASER FAILED TO LOAD</strong><br><br>Check your internet connection, then reload the page.</div>';
