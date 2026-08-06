@@ -480,6 +480,94 @@
       { id: 'kingston', name: 'Kingston', species: 'dog', x: 1300, y: 630, note: 'Kingston is nervous about the suitcases but grateful for the attention.' }
     ];
 
+    // ---------------------------------------------------------------------
+    // Save + scoring. Persisted with localStorage (not cookies \u2014 cookies
+    // ride along on every network request and cap out around 4KB, neither
+    // of which matters here since this is a single local file with no
+    // server; localStorage is the right tool for "remember this browser").
+    // ---------------------------------------------------------------------
+    const SAVE_KEY = 'rvThereYet:save:v1';
+    const BEST_CHAPTER_KEY = 'rvThereYet:bestChapterScores:v1';
+    const BEST_TOTAL_KEY = 'rvThereYet:bestTotalScore:v1';
+
+    function safeStorageGet(key) {
+      try { return localStorage.getItem(key); } catch (e) { return null; }
+    }
+    function safeStorageSet(key, value) {
+      try { localStorage.setItem(key, value); return true; } catch (e) { return false; }
+    }
+    function safeStorageRemove(key) {
+      try { localStorage.removeItem(key); } catch (e) {}
+    }
+
+    function loadSave() {
+      const raw = safeStorageGet(SAVE_KEY);
+      if (!raw) return null;
+      try {
+        const parsed = JSON.parse(raw);
+        if (!CHARACTERS[parsed.character] || typeof parsed.nextScene !== 'string') return null;
+        return parsed;
+      } catch (e) { return null; }
+    }
+
+    function writeSave(save) {
+      safeStorageSet(SAVE_KEY, JSON.stringify(save));
+    }
+
+    function clearSave() {
+      safeStorageRemove(SAVE_KEY);
+    }
+
+    function loadBestChapterScores() {
+      const raw = safeStorageGet(BEST_CHAPTER_KEY);
+      if (!raw) return {};
+      try { return JSON.parse(raw) || {}; } catch (e) { return {}; }
+    }
+
+    // Records a chapter score if it beats the stored best for that chapter
+    // title. Returns the previous best and whether this run just beat it.
+    function recordBestChapterScore(title, score) {
+      const scores = loadBestChapterScores();
+      const prevBest = scores[title] || 0;
+      const isNewBest = score > prevBest;
+      if (isNewBest) {
+        scores[title] = score;
+        safeStorageSet(BEST_CHAPTER_KEY, JSON.stringify(scores));
+      }
+      return { prevBest, isNewBest };
+    }
+
+    function loadBestTotalScore() {
+      const raw = safeStorageGet(BEST_TOTAL_KEY);
+      const n = Number(raw);
+      return Number.isFinite(n) ? n : 0;
+    }
+
+    function recordBestTotalScore(score) {
+      const prevBest = loadBestTotalScore();
+      const isNewBest = score > prevBest;
+      if (isNewBest) safeStorageSet(BEST_TOTAL_KEY, String(score));
+      return { prevBest, isNewBest };
+    }
+
+    // Generic per-chapter score: a completion base, a Family Harmony bonus
+    // (rewards playing well, not just finishing), and a side-quest bonus
+    // read straight from the existing "X/Y" stat strings every chapter
+    // already shows on its Chapter Complete screen \u2014 so this works for
+    // every chapter without needing chapter-specific scoring code.
+    function computeChapterScore(harmony, stats) {
+      let score = 1000;
+      score += Math.round(Phaser.Math.Clamp(harmony, 0, 100) * 5);
+      (stats || []).forEach((line) => {
+        const match = String(line).match(/(\d+)\s*\/\s*(\d+)/);
+        if (!match) return;
+        const num = Number(match[1]);
+        const den = Number(match[2]);
+        if (den > 0) score += Math.round((num / den) * 150);
+      });
+      return score;
+    }
+
     const touchState = {
       up: false,
       down: false,
@@ -673,6 +761,55 @@
         pixelText(this, GAME_W / 2, 148, 'THE STEINFELD–VANSOMERON FAMILY VACATION INCIDENT', 16, '#78d6c6')
           .setOrigin(0.5);
 
+        const save = loadSave();
+
+        const startNewTrip = () => {
+          clearSave();
+          this.scene.start('CharacterSelect');
+        };
+        const continueTrip = () => {
+          if (!save) return;
+          this.scene.start(save.nextScene, {
+            character: save.character,
+            harmony: save.harmony,
+            cumulativeScore: save.cumulativeScore,
+            chapterScores: save.chapterScores
+          });
+        };
+
+        let launched = false;
+        const guard = (fn) => () => {
+          if (launched) return;
+          launched = true;
+          fn();
+        };
+
+        if (save) {
+          const savedName = CHARACTERS[save.character] ? CHARACTERS[save.character].name : 'someone';
+          const start = pixelText(this, GAME_W / 2, 375, '[ CONTINUE YOUR TRIP ]', 24, '#ffffff')
+            .setOrigin(0.5)
+            .setInteractive({ useHandCursor: true });
+          pixelText(this, GAME_W / 2, 407, `PICK UP AS ${savedName.toUpperCase()} \u00B7 TRIP TOTAL SO FAR: ${save.cumulativeScore || 0}`, 12, '#9fe1cb')
+            .setOrigin(0.5);
+
+          const newTrip = pixelText(this, GAME_W / 2, 440, '[ OR START A NEW TRIP ]', 15, '#c7bfd8')
+            .setOrigin(0.5)
+            .setInteractive({ useHandCursor: true });
+
+          this.tweens.add({ targets: start, alpha: 0.4, duration: 700, yoyo: true, repeat: -1 });
+          start.on('pointerdown', guard(continueTrip));
+          newTrip.on('pointerdown', guard(startNewTrip));
+          if (this.input.keyboard) {
+            this.input.keyboard.once('keydown-SPACE', guard(continueTrip));
+            this.input.keyboard.once('keydown-ENTER', guard(continueTrip));
+            this.input.keyboard.once('keydown-E', guard(continueTrip));
+          }
+
+          pixelText(this, GAME_W / 2, 480, 'FULL ROAD-TRIP EDITION · CHOOSE YOUR TRAVELER', 12, '#a59bb8')
+            .setOrigin(0.5);
+          return;
+        }
+
         const start = pixelText(this, GAME_W / 2, 400, '[ HIT THE ROAD ]', 24, '#ffffff')
           .setOrigin(0.5)
           .setInteractive({ useHandCursor: true });
@@ -691,12 +828,7 @@
           repeat: -1
         });
 
-        let launched = false;
-        const launch = () => {
-          if (launched) return;
-          launched = true;
-          this.scene.start('CharacterSelect');
-        };
+        const launch = guard(startNewTrip);
         start.on('pointerdown', launch);
         if (this.input.keyboard) {
           this.input.keyboard.once('keydown-SPACE', launch);
@@ -1279,10 +1411,10 @@
       createUI() {
         this.hud = this.add.container(0, 0).setScrollFactor(0).setDepth(200);
 
-        const objectiveBg = this.add.rectangle(16, 16, 335, 145, COLORS.panel, .94)
+        const objectiveBg = this.add.rectangle(16, 16, 335, 145, COLORS.panel, .55)
           .setOrigin(0)
           .setStrokeStyle(3, 0x08070c);
-        const harmonyBg = this.add.rectangle(GAME_W - 260, 16, 244, 56, COLORS.panel, .94)
+        const harmonyBg = this.add.rectangle(GAME_W - 260, 16, 244, 56, COLORS.panel, .55)
           .setOrigin(0)
           .setStrokeStyle(3, 0x08070c);
         this.hud.add([objectiveBg, harmonyBg]);
@@ -1676,6 +1808,13 @@
         g.fillStyle(0xc99a6b, 1).fillRect(6, 18, 16, 3);
       });
 
+      make('bed-marker', 40, 26, (g) => {
+        g.fillStyle(0x000000, .2).fillEllipse(20, 23, 34, 6);
+        g.fillStyle(0x6d4d34, 1).fillRoundedRect(2, 6, 36, 16, 4);
+        g.fillStyle(0x9fe1cb, 1).fillRoundedRect(5, 9, 30, 10, 3);
+        g.fillStyle(0xf7f1dc, 1).fillRoundedRect(5, 9, 9, 10, 3);
+      });
+
       make('backpack', 34, 38, (g) => {
         g.fillStyle(0x000000, .2).fillEllipse(17, 34, 28, 6);
         g.fillStyle(0x66588f, 1).fillRoundedRect(6, 9, 22, 25, 5);
@@ -1723,6 +1862,8 @@
         this.familyHarmony = Number.isFinite(data.harmony) ? data.harmony : 72;
         this.playerId = CHARACTERS[data.character] ? data.character : 'jerad';
         this.playerData = CHARACTERS[this.playerId];
+        this.cumulativeScore = Number.isFinite(data.cumulativeScore) ? data.cumulativeScore : 0;
+        this.chapterScores = Array.isArray(data.chapterScores) ? data.chapterScores : [];
         this.dialogueOpen = false;
         this.currentInteractable = null;
         this.interactables = [];
@@ -1778,9 +1919,9 @@
 
       createAdventureUI(title) {
         this.hud = this.add.container(0, 0).setScrollFactor(0).setDepth(300);
-        const objectiveBg = this.add.rectangle(16, 16, 350, 138, COLORS.panel, .94)
+        const objectiveBg = this.add.rectangle(16, 16, 350, 138, COLORS.panel, .55)
           .setOrigin(0).setStrokeStyle(3, 0x08070c);
-        const harmonyBg = this.add.rectangle(GAME_W - 260, 16, 244, 56, COLORS.panel, .94)
+        const harmonyBg = this.add.rectangle(GAME_W - 260, 16, 244, 56, COLORS.panel, .55)
           .setOrigin(0).setStrokeStyle(3, 0x08070c);
         this.objectiveTitle = pixelText(this, 30, 27, title, 14, '#f4c95d').setScrollFactor(0).setDepth(301);
         this.objectiveText = pixelText(this, 30, 52, '', 12, '#f7f1dc')
@@ -2023,9 +2164,91 @@ CARS · CONES · POTHOLES: DODGE`, 11, '#f7f1dc')
           nextScene,
           harmony: this.familyHarmony,
           character: this.playerId,
+          cumulativeScore: this.cumulativeScore,
+          chapterScores: this.chapterScores,
           stats,
           caption
         }));
+      }
+
+      // ----------------------------------------------------------------
+      // Family NPCs \u2014 walkable, talkable versions of the rest of the
+      // family, available in every non-driving chapter. `configs` is an
+      // array of { key, x, y, bank, followBank, bedBank, bedX, bedY }.
+      // `bank` is a relLine() tone bank used for ordinary banter.
+      // `bedX`/`bedY` + `followBank`/`bedBank` opt an NPC into the
+      // escort-to-bed mechanic (Glamping only); leave them off elsewhere.
+      // ----------------------------------------------------------------
+      createFamilyNPCs(configs) {
+        this.familyNPCs = [];
+        configs.filter((cfg) => cfg.key !== this.playerId).forEach((cfg) => {
+          const sprite = this.physics.add.sprite(cfg.x, cfg.y, cfg.key).setDepth(18).setCollideWorldBounds(true);
+          sprite.body.setSize(15, 17).setOffset(5, 13);
+          sprite.charId = cfg.key;
+          sprite.displayName = charName(cfg.key);
+          sprite.bank = cfg.bank || { default: ['Hey.'] };
+          sprite.followBank = cfg.followBank || null;
+          sprite.bedBank = cfg.bedBank || null;
+          sprite.following = false;
+          sprite.escorted = false;
+          sprite.bedX = Number.isFinite(cfg.bedX) ? cfg.bedX : null;
+          sprite.bedY = Number.isFinite(cfg.bedY) ? cfg.bedY : null;
+          sprite.prompt = `TALK TO ${sprite.displayName.toUpperCase()}`;
+          sprite.interact = () => this.talkToFamilyNPC(sprite);
+          this.physics.add.collider(this.player, sprite);
+          if (this.walls) this.physics.add.collider(sprite, this.walls);
+          this.interactables.push(sprite);
+          this.familyNPCs.push(sprite);
+        });
+      }
+
+      talkToFamilyNPC(sprite) {
+        if (this.bedChartActive && sprite.bedX != null && !sprite.escorted) {
+          if (!sprite.following) {
+            sprite.following = true;
+            sprite.prompt = `${sprite.displayName.toUpperCase()} IS FOLLOWING YOU`;
+            this.say(sprite.displayName, relLine(sprite.charId, this.playerId, sprite.followBank || { default: ['Lead the way, I guess.'] }));
+          } else {
+            this.say(sprite.displayName, ['Almost there, right?']);
+          }
+          return;
+        }
+        this.say(sprite.displayName, relLine(sprite.charId, this.playerId, sprite.bank));
+      }
+
+      // Call once per frame (in a chapter that uses the escort mechanic) to
+      // walk following NPCs toward the player and deliver them at their bed.
+      updateFamilyFollowers() {
+        if (!this.familyNPCs) return;
+        this.familyNPCs.forEach((npc) => {
+          if (npc.following && !npc.escorted) {
+            const dx = this.player.x - npc.x;
+            const dy = this.player.y - npc.y;
+            const dist = Math.hypot(dx, dy) || 1;
+            if (dist > 50) {
+              const speed = 150;
+              npc.setVelocity((dx / dist) * speed, (dy / dist) * speed);
+            } else {
+              npc.setVelocity(0, 0);
+            }
+            if (npc.bedX != null) {
+              const bedDist = Phaser.Math.Distance.Between(npc.x, npc.y, npc.bedX, npc.bedY);
+              if (bedDist < 46) {
+                npc.following = false;
+                npc.escorted = true;
+                npc.setVelocity(0, 0);
+                npc.body.setImmovable(true);
+                npc.prompt = `${npc.displayName.toUpperCase()} IS ASLEEP`;
+                this.state.bedsEscorted = (this.state.bedsEscorted || 0) + 1;
+                this.adjustHarmony(3);
+                this.say(npc.displayName, relLine(npc.charId, this.playerId, npc.bedBank || { default: ['Goodnight.'] }));
+                this.updateObjective();
+              }
+            }
+          } else {
+            npc.setVelocity(0, 0);
+          }
+        });
       }
     }
 
@@ -2270,6 +2493,48 @@ CARS · CONES · POTHOLES: DODGE`, 11, '#f7f1dc')
         this.drawReserve();
         this.createPlayerAndCamera(410, 850);
         this.createReserveObjectives();
+        this.createFamilyNPCs([
+          { key: 'jerad', x: 700, y: 500, bank: {
+            'peer-troll-mutual': [['I already told the ranger three animal puns. She stopped making eye contact.']],
+            default: [['I already told the ranger three animal puns. She stopped making eye contact.']]
+          }},
+          { key: 'megan', x: 650, y: 900, bank: {
+            spouse: [['I have the animal checklist AND the bathroom map. One of those is more useful today.']],
+            'kid-challenge': [['I have a checklist. It has your name on three separate line items.']],
+            default: [['I have the animal checklist AND the bathroom map. One of those is more useful today.']]
+          }},
+          { key: 'renee', x: 900, y: 900, bank: {
+            spouse: [['The lake is gorgeous, and also absolutely somebody\u2019s territory. I\u2019m at peace with both facts.']],
+            'inlaw-easy': [['Mike already asked the ranger if the rhinos recognize zoning laws. I\u2019m choosing to find it charming.']],
+            default: [['The lake is gorgeous, and also absolutely somebody\u2019s territory. I\u2019m at peace with both facts.']]
+          }},
+          { key: 'mike', x: 1100, y: 850, bank: {
+            spouse: [['Renee says my rhino trivia is \u201Ca lot.\u201D I prefer \u201Ca public service.\u201D']],
+            'peer-troll-mutual': [['Go ahead, make the joke. I\u2019ve already heard it from the ranger, twice, unprompted.']],
+            'tease-target-fond': [['Did you know a group of rhinos is called a crash? I\u2019ve told four strangers today.']],
+            default: [['Did you know a group of rhinos is called a crash? I\u2019ve told four strangers today.']]
+          }},
+          { key: 'cora', x: 850, y: 550, bank: {
+            'kid-pushback': [['I\u2019m tracking every animal on a list. It\u2019s color-coded. I did not ask for your input on the colors.']],
+            'close-peer': [['I\u2019m tracking every animal on a list. Want a section? I\u2019ll assign you the easy animals.']],
+            default: [['I\u2019m tracking every animal on a list. It\u2019s very organized. You\u2019re welcome.']]
+          }},
+          { key: 'mae', x: 750, y: 650, bank: {
+            'deadpan-tease': [['The bison looked at Mike the way I look at Mike. I felt understood by a large animal.']],
+            'kid-listens': [['The bison looked unimpressed by all of this. Same.']],
+            default: [['The bison looked unimpressed by all of this. Same.']]
+          }},
+          { key: 'mackenzie', x: 950, y: 470, bank: {
+            'troll-target': [['I\u2019ve decided I\u2019m faster than every animal here. You\u2019re welcome to time me and lose.']],
+            'sibling-competitive': [['I\u2019ve decided I\u2019m faster than every animal here. Kennedy disagrees. Kennedy is wrong.']],
+            default: [['I\u2019ve decided I\u2019m faster than every animal here. Unconfirmed, but I believe it completely.']]
+          }},
+          { key: 'kennedy', x: 600, y: 300, bank: {
+            'fond-warm': [['I already found two shortcuts the map doesn\u2019t show. You\u2019re welcome, again.']],
+            'sibling-competitive': [['I found two shortcuts before Mackenzie found one. I\u2019m not bringing it up again. This is the last time.']],
+            default: [['I already found two shortcuts the map doesn\u2019t show. You\u2019re welcome, again.']]
+          }}
+        ]);
         this.updateObjective();
         this.time.delayedCall(300, () => this.say('Kennedy', [
           'There are animals, trails, and several signs telling us not to wander off.',
@@ -2406,15 +2671,81 @@ CARS · CONES · POTHOLES: DODGE`, 11, '#f7f1dc')
 
       create() {
         this.setupAdventure({ title: 'CHAPTER 4 · GLAMPING', worldW: 1500, worldH: 1000 });
-        this.state = { bags: 0, beds: false, dinner: false, stars: false, noise: false, fireflies: 0 };
+        this.state = { bags: 0, chartMade: false, bedsEscorted: 0, dinner: false, stars: false, noise: false, fireflies: 0 };
+        this.bedChartActive = false;
         this.drawGlamping();
         this.createPlayerAndCamera();
+        this.createGlampingFamily();
         this.createGlampingObjectives();
         this.updateObjective();
         this.time.delayedCall(350, () => this.say('Renee', [
           'This is camping with beds, electricity, and reasonable expectations.',
           'So naturally we will still find a way to argue about blankets.'
         ]));
+      }
+
+      // Beds are split by family: Steinfelds in the left tent, VanSomerons
+      // in the right. Each non-player family member gets a fixed slot;
+      // beds only become deliverable once the chart exists (Cora's line).
+      createGlampingFamily() {
+        const steinfeldBeds = [[250, 560], [320, 596], [400, 596], [470, 560]];
+        const vansomeronBeds = [[1000, 560], [1070, 596], [1150, 596], [1220, 560]];
+        let sIdx = 0;
+        let vIdx = 0;
+
+        const data = [
+          { key: 'jerad', x: 660, y: 900, bank: {
+            spouse: [['I\u2019ve claimed the hammock as a legal address.', 'Megan\u2019s already filed a noise complaint against it.']],
+            default: [['I\u2019ve claimed the hammock as a legal address.']]
+          }, followBank: { default: [['Lead on. I trust you completely, which is either sweet or a mistake.']] },
+            bedBank: { default: [['This is the spot. Officially approved. Goodnight.']] } },
+          { key: 'megan', x: 840, y: 900, bank: {
+            'kid-challenge': [['I laminated the sleeping chart. Yes, laminated. No, you may not renegotiate.']],
+            default: [['I laminated the sleeping chart. That\u2019s how serious this is.']]
+          }, followBank: { default: [['Lead the way. I already know exactly where this is going, but go ahead.']] },
+            bedBank: { default: [['Correct bed, correct spot, correct chart. Rare. Perfect. Goodnight.']] } },
+          { key: 'renee', x: 500, y: 870, bank: {
+            spouse: [['Mike volunteered us for the bed nearest the door. I\u2019m choosing to see it as chivalry.']],
+            default: [['Whoever\u2019s closest to the door is unofficially on raccoon watch. Kidding. Mostly.']]
+          }, followBank: { default: [['Lead on. I\u2019ll follow you into most things, within reason.']] },
+            bedBank: { default: [['This one\u2019s perfect. Thank you for walking me over. Goodnight.']] } },
+          { key: 'mike', x: 1020, y: 870, bank: {
+            spouse: [['I\u2019ve inspected every sleeping bag zipper. Renee says that\u2019s not a real job. I disagree, on the record.']],
+            'peer-troll-mutual': [['I\u2019ve inspected every sleeping bag zipper personally. All fully operational. You\u2019re welcome.']],
+            default: [['I\u2019ve inspected every sleeping bag zipper personally. All fully operational.']]
+          }, followBank: { default: [['Lead the way. I\u2019ll narrate our journey as we go, whether you want that or not.']] },
+            bedBank: { default: [['This is the spot. Brief closing thought: good bed. Goodnight.']] } },
+          { key: 'cora', x: 700, y: 930, bank: {
+            'kid-pushback': [['I made the sleeping chart. Yours is final. I already denied the appeal you were about to make.']],
+            'close-peer': [['I made the sleeping chart. Want to co-sign it so it looks official?']],
+            default: [['I made the sleeping chart. Appeals are accepted in writing and discarded alphabetically.']]
+          }, followBank: { default: [['Fine, lead me to my own assigned spot. This is a little embarrassing for both of us.']] },
+            bedBank: { default: [['Correctly delivered, on schedule. I\u2019m proud of us. Goodnight.']] } },
+          { key: 'mae', x: 800, y: 930, bank: {
+            'deadpan-tease': [['I requested the bed farthest from Mike\u2019s sleep-narration. Please respect this boundary.']],
+            default: [['I\u2019m sleeping closest to the exit. Strategic, in case of raccoons or Mike.']]
+          }, followBank: { default: [['Sure, lead on. I\u2019ll be quietly judging the route the whole way.']] },
+            bedBank: { default: [['This\u2019ll do. Efficient. Goodnight.']] } },
+          { key: 'mackenzie', x: 940, y: 930, bank: {
+            'troll-target': [['I called the top bunk before your chart even existed. You\u2019re just delivering the paperwork now.']],
+            default: [['I called the top bunk before the chart existed. Cora\u2019s chart just confirmed what I already knew.']]
+          }, followBank: { default: [['Lead on, but I\u2019m timing you. This is a competition now.']] },
+            bedBank: { default: [['Not bad. I\u2019ll allow it. Goodnight.']] } },
+          { key: 'kennedy', x: 600, y: 930, bank: {
+            'fond-warm': [['I scouted every bed already. Found the softest one. Yours, probably. You\u2019re welcome.']],
+            default: [['I already scouted every bed for the softest one. I\u2019m not saying which. It\u2019s mine now.']]
+          }, followBank: { default: [['Lead on. I would\u2019ve found it myself, but sure, you can walk me.']] },
+            bedBank: { default: [['This is the one. Good pick. Goodnight.']] } }
+        ];
+
+        const configs = data.map((cfg) => {
+          const family = CHARACTERS[cfg.key].family;
+          const slot = family === 'Steinfeld' ? steinfeldBeds[sIdx++] : vansomeronBeds[vIdx++];
+          return { ...cfg, bedX: slot[0], bedY: slot[1] };
+        });
+
+        this.createFamilyNPCs(configs);
+        this.bedTarget = this.familyNPCs.length;
       }
 
       drawGlamping() {
@@ -2461,16 +2792,22 @@ CARS · CONES · POTHOLES: DODGE`, 11, '#f7f1dc')
           ], () => this.updateObjective());
         }, { bob: true }));
 
-        this.addInteractable(560, 720, 'stamp-icon', 'ASSIGN THE SLEEPING SPACES', (item) => {
+        this.addInteractable(560, 720, 'stamp-icon', 'ASK CORA ABOUT SLEEPING SPACES', (item) => {
           if (this.state.bags < 3) return this.say('Megan', ['The luggage should enter the accommodations before we begin negotiating ownership of them.']);
-          if (this.state.beds) return;
-          this.state.beds = true;
+          if (this.state.chartMade) return this.say('Cora', ['The chart is final. Go walk everyone to their beds \u2014 I\u2019m not delivering people, I just made the spreadsheet.']);
+          this.state.chartMade = true;
+          this.bedChartActive = true;
           item.disableBody(true, true);
-          this.say('Cora', ['I made a bed chart. Appeals are accepted in writing and discarded alphabetically.'], () => this.updateObjective());
+          this.revealBedMarkers();
+          this.say('Cora', [
+            'I made a sleeping chart. Appeals are accepted in writing and discarded alphabetically.',
+            `Everyone\u2019s bed is marked around camp. Go find each person and walk them to their spot \u2014 I\u2019m not a delivery service.`
+          ], () => this.updateObjective());
         }, { bob: true });
 
         this.addInteractable(760, 570, 'food-icon', 'PREPARE DINNER', (item) => {
-          if (!this.state.beds) return this.say('Renee', ['Beds first, dinner second. We are preserving the illusion of civilization.']);
+          if (!this.state.chartMade) return this.say('Renee', ['Beds first, dinner second. We are preserving the illusion of civilization.']);
+          if (this.state.bedsEscorted < this.bedTarget) return this.say('Renee', [`Not everyone\u2019s settled in yet (${this.state.bedsEscorted}/${this.bedTarget}). Dinner waits for beds.`]);
           if (this.state.dinner) return;
           this.state.dinner = true;
           item.disableBody(true, true);
@@ -2508,10 +2845,19 @@ CARS · CONES · POTHOLES: DODGE`, 11, '#f7f1dc')
         }, { bob: true }));
       }
 
+      revealBedMarkers() {
+        this.familyNPCs.forEach((npc) => {
+          if (npc.bedX == null) return;
+          const marker = this.add.image(npc.bedX, npc.bedY, 'bed-marker').setDepth(12);
+          pixelText(this, npc.bedX, npc.bedY - 20, npc.displayName.toUpperCase(), 9, '#a59bb8').setOrigin(0.5).setDepth(12);
+        });
+      }
+
       updateObjective() {
         let line;
         if (this.state.bags < 3) line = `1. MOVE LUGGAGE TO THE TENT (${this.state.bags}/3)`;
-        else if (!this.state.beds) line = '2. ASSIGN THE SLEEPING SPACES';
+        else if (!this.state.chartMade) line = '2. ASK CORA ABOUT SLEEPING SPACES';
+        else if (this.state.bedsEscorted < this.bedTarget) line = `2. WALK EVERYONE TO THEIR BEDS (${this.state.bedsEscorted}/${this.bedTarget})`;
         else if (!this.state.dinner) line = '3. PREPARE DINNER';
         else if (!this.state.stars) line = '4. GO STARGAZING';
         else line = '5. INVESTIGATE THE NIGHTTIME NOISE';
@@ -2520,6 +2866,7 @@ CARS · CONES · POTHOLES: DODGE`, 11, '#f7f1dc')
 
       update() {
         const pressed = this.actionPressed();
+        this.updateFamilyFollowers();
         this.updateWalkingPlayer(pressed, 185);
       }
     }
@@ -2581,6 +2928,44 @@ CARS · CONES · POTHOLES: DODGE`, 11, '#f7f1dc')
           this.player.setTexture(this.playerId).setScale(1).setPosition(1080, 580).setAngle(0);
           this.player.body.setSize(15, 17).setOffset(5, 13);
           this.adjustHarmony(4);
+          this.createFamilyNPCs([
+            { key: 'jerad', x: 1250, y: 620, bank: {
+              'peer-troll-mutual': [['I\u2019ve named the raccoon. Legally, I believe that makes it mine now.']],
+              default: [['I\u2019ve named the raccoon. Legally, I believe that makes it mine now.']]
+            }},
+            { key: 'megan', x: 1300, y: 700, bank: {
+              spouse: [['Hookup order is power, then water, then fire. In that order. I will be checking.']],
+              'kid-challenge': [['Hookup order is power, then water, then fire. Yes, in that order. No, you may not reorder it.']],
+              default: [['Hookup order is power, then water, then fire. I will be checking.']]
+            }},
+            { key: 'renee', x: 900, y: 650, bank: {
+              spouse: [['Mike has volunteered to supervise the fire. I\u2019ve quietly moved the extinguisher closer.']],
+              default: [['Mike has volunteered to supervise the fire. I\u2019ve quietly moved the extinguisher closer.']]
+            }},
+            { key: 'mike', x: 950, y: 720, bank: {
+              spouse: [['I\u2019m supervising the fire. Renee moved the extinguisher. I choose to see that as teamwork.']],
+              'peer-troll-mutual': [['I\u2019m supervising the fire. I have opinions about kindling architecture. Several opinions.']],
+              default: [['I\u2019m supervising the fire. I have opinions about kindling architecture. Several opinions.']]
+            }},
+            { key: 'cora', x: 1150, y: 750, bank: {
+              'kid-pushback': [['I\u2019ve assigned marshmallow-recovery duty. You\u2019re on it. It wasn\u2019t really a question.']],
+              'close-peer': [['I\u2019ve assigned marshmallow-recovery duty. Want in? I can\u2019t promise it\u2019s glamorous.']],
+              default: [['I\u2019ve assigned marshmallow-recovery duty. It wasn\u2019t really a question for anyone.']]
+            }},
+            { key: 'mae', x: 1050, y: 780, bank: {
+              'deadpan-tease': [['Mike has explained the fire pit\u2019s \u201Cload-bearing structure\u201D to me twice. It\u2019s a circle of rocks.']],
+              default: [['Mike has explained the fire pit\u2019s \u201Cload-bearing structure\u201D to me twice. It\u2019s a circle of rocks.']]
+            }},
+            { key: 'mackenzie', x: 1200, y: 800, bank: {
+              'troll-target': [['I\u2019m already winning at marshmallow toasting. This is a competition now. You\u2019re losing.']],
+              'sibling-competitive': [['I\u2019m already winning at marshmallow toasting. Kennedy will disagree. Kennedy is, again, wrong.']],
+              default: [['I\u2019m already winning at marshmallow toasting. This is a competition now, whether you agreed or not.']]
+            }},
+            { key: 'kennedy', x: 880, y: 780, bank: {
+              'fond-warm': [['There\u2019s a raccoon path behind the fire pit. I\u2019m mapping it before the adults notice.']],
+              default: [['There\u2019s a raccoon path behind the fire pit. I\u2019m mapping it before the adults notice.']]
+            }}
+          ]);
           this.say('Renee', ['The RV is parked.', 'It is technically inside the campsite, which is the standard we are choosing.'], () => this.updateObjective());
         }, { bob: true });
 
@@ -2669,6 +3054,45 @@ CARS · CONES · POTHOLES: DODGE`, 11, '#f7f1dc')
         this.drawZoo();
         this.createZooPlayer();
         this.createZooObjectives();
+        this.createFamilyNPCs([
+          { key: 'jerad', x: 900, y: 350, bank: {
+            'peer-troll-mutual': [['I\u2019ve been narrating the animals in a nature-documentary voice. Mike\u2019s asked me to stop. I have not stopped.']],
+            default: [['I\u2019ve been narrating the animals in a nature-documentary voice. Nobody asked. I have not stopped.']]
+          }},
+          { key: 'megan', x: 620, y: 600, bank: {
+            spouse: [['I have a route. It is efficient. Nobody is following it, including you.']],
+            'kid-challenge': [['I have a route. It is efficient. You are, predictably, not following it.']],
+            default: [['I have a route through all four zones. It is efficient. Nobody is following it.']]
+          }},
+          { key: 'renee', x: 1180, y: 600, bank: {
+            spouse: [['Mike\u2019s given the flamingos a whole backstory. I\u2019ve stopped fact-checking him. It\u2019s kinder this way.']],
+            default: [['Mike\u2019s given the flamingos a whole backstory. I\u2019ve stopped fact-checking him. It\u2019s kinder this way.']]
+          }},
+          { key: 'mike', x: 900, y: 550, bank: {
+            spouse: [['I\u2019ve named the flamingos. Renee says I need a hobby. I believe this is one.']],
+            'peer-troll-mutual': [['I\u2019ve named all the flamingos. Go ahead and laugh, I already know their whole backstory.']],
+            default: [['I\u2019ve named all the flamingos. I have a whole backstory for each of them now.']]
+          }},
+          { key: 'cora', x: 680, y: 830, bank: {
+            'kid-pushback': [['I have a meeting-point protocol if anyone gets separated. You especially should memorize it.']],
+            'close-peer': [['I have a meeting-point protocol if anyone gets separated. Want to hear it? It\u2019s good.']],
+            default: [['I have a meeting-point protocol in case anyone gets separated. Nobody\u2019s tested it yet.']]
+          }},
+          { key: 'mae', x: 1120, y: 830, bank: {
+            'deadpan-tease': [['Mike told a stranger the flamingo\u2019s name was Gerald. The flamingo did not react. Neither did I.']],
+            default: [['Mike told a stranger a flamingo is named Gerald. The flamingo did not react. Neither did I.']]
+          }},
+          { key: 'mackenzie', x: 1000, y: 420, bank: {
+            'troll-target': [['I\u2019ve decided which animal would win in a fight against everyone here. It\u2019s not close.']],
+            'sibling-competitive': [['I\u2019ve decided which animal would beat Kennedy in a fight. It\u2019s not close.']],
+            default: [['I\u2019ve decided which animal would win in a fight against everyone here. It\u2019s not close.']]
+          }},
+          { key: 'kennedy', x: 800, y: 420, bank: {
+            'fond-warm': [['I found a shortcut between Savanna and Forest the map doesn\u2019t show. Obviously.']],
+            'sibling-competitive': [['I found a shortcut Mackenzie hasn\u2019t found yet. I\u2019m not gloating. I am absolutely gloating.']],
+            default: [['I found a shortcut between Savanna and Forest the map doesn\u2019t show. Obviously.']]
+          }}
+        ]);
         this.updateObjective();
         this.time.delayedCall(350, () => this.say('Cora', [
           'We need a route, a meeting point, and a firm gift-shop policy.',
@@ -3044,9 +3468,30 @@ CARS · CONES · POTHOLES: DODGE`, 11, '#f7f1dc')
           nextScene: data.nextScene || 'Milwaukee',
           harmony: Number.isFinite(data.harmony) ? data.harmony : 72,
           character: CHARACTERS[data.character] ? data.character : 'jerad',
+          cumulativeScore: Number.isFinite(data.cumulativeScore) ? data.cumulativeScore : 0,
+          chapterScores: Array.isArray(data.chapterScores) ? data.chapterScores : [],
           stats: Array.isArray(data.stats) ? data.stats : [],
           caption: data.caption || ''
         };
+
+        this.chapterScore = computeChapterScore(this.results.harmony, this.results.stats);
+        this.bestInfo = recordBestChapterScore(this.results.chapterTitle, this.chapterScore);
+        this.newChapterScores = [...this.results.chapterScores, { title: this.results.chapterTitle, score: this.chapterScore }];
+        this.newCumulativeScore = this.results.cumulativeScore + this.chapterScore;
+
+        // Autosave right away \u2014 progress survives even if the tab closes
+        // before the player taps continue. Chapters resume at the start of
+        // the next one; there's no mid-chapter save.
+        if (this.results.nextScene !== 'Finale') {
+          writeSave({
+            character: this.results.character,
+            harmony: this.results.harmony,
+            nextScene: this.results.nextScene,
+            cumulativeScore: this.newCumulativeScore,
+            chapterScores: this.newChapterScores,
+            savedAt: Date.now()
+          });
+        }
       }
 
       create() {
@@ -3081,6 +3526,14 @@ CARS · CONES · POTHOLES: DODGE`, 11, '#f7f1dc')
           pixelText(this, GAME_W / 2, 260, this.results.caption, 13, '#c7bfd8')
             .setOrigin(.5).setAlign('center').setWordWrapWidth(650);
         }
+
+        const bestDisplay = Math.max(this.bestInfo.prevBest, this.chapterScore);
+        const scoreLine = this.bestInfo.isNewBest
+          ? `CHAPTER SCORE: ${this.chapterScore}  \u2605 NEW BEST!`
+          : `CHAPTER SCORE: ${this.chapterScore}   (BEST: ${bestDisplay})`;
+        pixelText(this, GAME_W / 2, 344, scoreLine, 14, this.bestInfo.isNewBest ? '#f4c95d' : '#c7bfd8').setOrigin(.5);
+        pixelText(this, GAME_W / 2, 364, `TRIP TOTAL SO FAR: ${this.newCumulativeScore}`, 11, '#78d6c6').setOrigin(.5);
+
         pixelText(this, GAME_W / 2, 472, rating, 18, '#ffffff').setOrigin(.5);
         this.continueLabel = pixelText(this, GAME_W / 2, 510, '[ A / TAP TO CONTINUE ]', 14, '#c7bfd8').setOrigin(.5);
         this.tweens.add({ targets: this.continueLabel, alpha: .4, duration: 700, yoyo: true, repeat: -1 });
@@ -3089,7 +3542,12 @@ CARS · CONES · POTHOLES: DODGE`, 11, '#f7f1dc')
           if (!this.ready) return;
           this.ready = false;
           touchState.interactPressed = false;
-          this.scene.start(this.results.nextScene, { harmony: this.results.harmony, character: this.results.character });
+          this.scene.start(this.results.nextScene, {
+            harmony: this.results.harmony,
+            character: this.results.character,
+            cumulativeScore: this.newCumulativeScore,
+            chapterScores: this.newChapterScores
+          });
         };
         this.continueTrip = continueTrip;
         if (this.input.keyboard) {
@@ -3115,6 +3573,53 @@ CARS · CONES · POTHOLES: DODGE`, 11, '#f7f1dc')
       init(data = {}) {
         this.harmony = Number.isFinite(data.harmony) ? data.harmony : 72;
         this.character = CHARACTERS[data.character] ? data.character : 'jerad';
+        this.chapterScores = Array.isArray(data.chapterScores) ? data.chapterScores : [];
+        this.totalScore = Number.isFinite(data.cumulativeScore) ? data.cumulativeScore : 0;
+        this.bestTotalInfo = recordBestTotalScore(this.totalScore);
+        // The trip is over \u2014 there's nothing left to resume into.
+        clearSave();
+      }
+
+      buildScoreCardText() {
+        const lines = [
+          'RV THERE YET? \u2014 TRIP RECAP',
+          `Played as ${CHARACTERS[this.character].name}`,
+          ...this.chapterScores.map((cs) => `  ${cs.title}: ${cs.score}`),
+          `TOTAL SCORE: ${this.totalScore}${this.bestTotalInfo.isNewBest ? ' (NEW BEST!)' : ''}`,
+          `Final Family Harmony: ${this.harmony}%`
+        ];
+        return lines.join('\n');
+      }
+
+      copyScoreCard() {
+        const text = this.buildScoreCardText();
+        const done = () => {
+          this.copyLabel.setText('[ COPIED \u2014 PASTE IT ANYWHERE ]');
+          this.time.delayedCall(1800, () => {
+            if (this.copyLabel) this.copyLabel.setText('[ TAP TO COPY YOUR SCORE CARD ]');
+          });
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done).catch(() => this.fallbackCopy(text, done));
+        } else {
+          this.fallbackCopy(text, done);
+        }
+      }
+
+      fallbackCopy(text, done) {
+        try {
+          const area = document.createElement('textarea');
+          area.value = text;
+          area.style.position = 'fixed';
+          area.style.opacity = '0';
+          document.body.appendChild(area);
+          area.select();
+          document.execCommand('copy');
+          document.body.removeChild(area);
+          done();
+        } catch (e) {
+          this.copyLabel.setText('[ COPY FAILED \u2014 SCREENSHOT THIS INSTEAD ]');
+        }
       }
 
       create() {
@@ -3131,24 +3636,39 @@ CARS · CONES · POTHOLES: DODGE`, 11, '#f7f1dc')
         g.fillStyle(0x24212c, 1).fillCircle(390, 397, 34).fillCircle(575, 397, 34);
         g.fillStyle(0x8f8a98, 1).fillCircle(390, 397, 14).fillCircle(575, 397, 14);
 
-        pixelText(this, GAME_W / 2, 48, 'THE FAMILY MADE IT HOME', 36, '#f4c95d').setOrigin(.5);
-        pixelText(this, GAME_W / 2, 102, 'RV THERE YET?', 24, '#78d6c6').setOrigin(.5);
-        pixelText(this, GAME_W / 2, 150,
+        pixelText(this, GAME_W / 2, 40, 'THE FAMILY MADE IT HOME', 32, '#f4c95d').setOrigin(.5);
+        pixelText(this, GAME_W / 2, 86, 'RV THERE YET?', 22, '#78d6c6').setOrigin(.5);
+        pixelText(this, GAME_W / 2, 118,
           'Milwaukee → The Wilds → Glamping → Campground → Columbus Zoo → Milwaukee',
-          13, '#f7f1dc').setOrigin(.5);
+          12, '#f7f1dc').setOrigin(.5);
 
         const ending = this.harmony >= 88 ? 'LEGENDARY FAMILY VACATION'
           : this.harmony >= 68 ? 'MOSTLY ACCORDING TO PLAN'
           : this.harmony >= 42 ? 'WE WILL LAUGH ABOUT THIS SOMEDAY'
           : 'MEGAN IS PLANNING THE NEXT TRIP ALONE';
 
-        pixelText(this, GAME_W / 2, 195, `FINAL FAMILY HARMONY: ${this.harmony}%`, 18, '#ffffff').setOrigin(.5);
-        pixelText(this, GAME_W / 2, 225, ending, 20, '#f4c95d').setOrigin(.5);
-        pixelText(this, GAME_W / 2, 250, `YOU DROVE THIS ONE AS ${CHARACTERS[this.character].name.toUpperCase()}`, 11, '#a59bb8').setOrigin(.5);
-        pixelText(this, GAME_W / 2, 455,
+        pixelText(this, GAME_W / 2, 152, `FINAL FAMILY HARMONY: ${this.harmony}%`, 16, '#ffffff').setOrigin(.5);
+        pixelText(this, GAME_W / 2, 178, ending, 18, '#f4c95d').setOrigin(.5);
+        pixelText(this, GAME_W / 2, 200, `YOU DROVE THIS ONE AS ${CHARACTERS[this.character].name.toUpperCase()}`, 11, '#a59bb8').setOrigin(.5);
+
+        pixelText(this, GAME_W / 2, 228, `TRIP TOTAL SCORE: ${this.totalScore}`, 19, '#f4c95d').setOrigin(.5);
+        const bestLine = this.bestTotalInfo.isNewBest
+          ? '\u2605 NEW PERSONAL BEST \u2605'
+          : `PERSONAL BEST: ${Math.max(this.bestTotalInfo.prevBest, this.totalScore)}`;
+        pixelText(this, GAME_W / 2, 250, bestLine, 12, this.bestTotalInfo.isNewBest ? '#f4c95d' : '#c7bfd8').setOrigin(.5);
+
+        pixelText(this, GAME_W / 2, 448,
           'Everyone survived. The RV survived in the broad legal sense.\nThe children will remember the animals. The adults will remember the receipts.',
-          14, '#f7f1dc').setOrigin(.5).setAlign('center');
-        const replay = pixelText(this, GAME_W / 2, 515, '[ A / TAP TO START ANOTHER BAD IDEA ]', 13, '#c7bfd8').setOrigin(.5);
+          13, '#f7f1dc').setOrigin(.5).setAlign('center');
+
+        this.copyLabel = pixelText(this, GAME_W / 2, 494, '[ TAP TO COPY YOUR SCORE CARD ]', 13, '#9fe1cb')
+          .setOrigin(.5).setInteractive({ useHandCursor: true });
+        this.copyLabel.on('pointerdown', (pointer, x, y, event) => {
+          event.stopPropagation();
+          this.copyScoreCard();
+        });
+
+        const replay = pixelText(this, GAME_W / 2, 520, '[ A / TAP TO START ANOTHER BAD IDEA ]', 13, '#c7bfd8').setOrigin(.5);
         this.tweens.add({ targets: replay, alpha: .4, duration: 700, yoyo: true, repeat: -1 });
 
         const restart = () => {
