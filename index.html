@@ -586,24 +586,35 @@
     }
 
     // ---------------------------------------------------------------------
-    // Music. Five tracks total, mapped across every scene. Loaded once in
-    // TitleScene's preload() and cached for the rest of the game session.
-    // If a track file isn't present (e.g. this file was shared without the
-    // audio/ folder), everything degrades silently \u2014 no crash, no missing
-    // asset noise, the game just plays without music.
+    // Music. Five tracks, mapped across every scene. Hosted on GitHub
+    // (raw.githubusercontent.com) rather than embedded, since embedding
+    // ~10MB of audio as base64 would bloat this single HTML file
+    // substantially. This does mean an internet connection is needed to
+    // hear music \u2014 same as the game already needs for Phaser itself,
+    // loaded from a CDN. If a track can't load, everything degrades
+    // silently: no crash, no missing-asset noise, just no music.
+    //
+    // Loading happens via a tiny persistent AudioBootScene that launches
+    // once at game start and never stops \u2014 deliberately NOT tied to
+    // whichever gameplay scene is currently visible, so a quick player
+    // clicking through Title \u2192 CharacterSelect \u2192 Milwaukee in a couple
+    // of seconds can't cancel an in-progress download by causing the
+    // scene that started it to shut down. It also means the title screen
+    // renders immediately rather than waiting on ~10MB of audio to
+    // download before the player can even see a menu.
     // ---------------------------------------------------------------------
     const MUSIC_FILES = {
-      main: 'audio/theme-main.mp3',
-      highway: 'audio/theme-highway.mp3',
-      cozy: 'audio/theme-cozy.mp3',
-      chapterComplete: 'audio/jingle-chapter-complete.mp3',
-      finale: 'audio/theme-finale.mp3'
+      main: 'https://raw.githubusercontent.com/Jadednikon/RV-There-Yet-Game/refs/heads/main/Cartridge%20Highway.mp3',
+      highway: 'https://raw.githubusercontent.com/Jadednikon/RV-There-Yet-Game/refs/heads/main/Rainbow%20Drift.mp3',
+      cozy: 'https://raw.githubusercontent.com/Jadednikon/RV-There-Yet-Game/refs/heads/main/Firefly%20Pocket.mp3',
+      chapterComplete: 'https://raw.githubusercontent.com/Jadednikon/RV-There-Yet-Game/refs/heads/main/Tiny%20Trophy%20Parade.mp3',
+      finale: 'https://raw.githubusercontent.com/Jadednikon/RV-There-Yet-Game/refs/heads/main/Back%20to%208-Bit%20Harbor.mp3'
     };
 
     function preloadMusic(scene) {
       Object.entries(MUSIC_FILES).forEach(([key, path]) => {
         if (scene.cache.audio.exists(key)) return;
-        scene.load.audio(key, [path], { xhrSettings: { timeout: 1500 } });
+        scene.load.audio(key, [path], { xhrSettings: { timeout: 20000 } });
       });
       scene.load.on('loaderror', (file) => {
         if (MUSIC_FILES[file.key]) {
@@ -620,9 +631,9 @@
       return Boolean(scene.cache.audio.exists(key));
     }
 
-    // Crossfades from whatever's currently playing to `key`. Safe to call
-    // every time a scene starts \u2014 it no-ops if that track is already playing.
-    function playMusic(scene, key, options = {}) {
+    // The actual crossfade, run only once the requested track is confirmed
+    // to be in the cache.
+    function startTrack(scene, key, options = {}) {
       const { loop = true, volume = 0.5, fadeMs = 650 } = options;
       if (currentMusicKey === key && currentMusic && currentMusic.isPlaying) return;
       const outgoing = currentMusic;
@@ -644,6 +655,21 @@
           if (currentMusic === incoming) { currentMusic = null; currentMusicKey = null; }
         });
       }
+    }
+
+    // Public entry point every scene uses. Plays immediately if the track
+    // is already cached (the common case, once the background load from
+    // AudioBootScene finishes); otherwise waits for that persistent
+    // loader \u2014 not this scene's own, which could be cancelled by a
+    // scene transition \u2014 to finish before starting playback.
+    function playMusic(scene, key, options = {}) {
+      if (musicAvailable(scene, key)) {
+        startTrack(scene, key, options);
+        return;
+      }
+      const loaderScene = scene.scene.get('AudioBoot');
+      if (!loaderScene) return;
+      loaderScene.load.once(Phaser.Loader.Events.COMPLETE, () => startTrack(scene, key, options));
     }
 
     function stopMusic(scene, fadeMs = 500) {
@@ -867,12 +893,22 @@
       }).setOrigin(0, 0);
     }
 
+    // Boots first, launches Title immediately (no waiting on it), and then
+    // owns audio loading for the rest of the game session in the
+    // background \u2014 see the music engine comment above for why this needs
+    // its own never-stopped scene rather than piggybacking on whichever
+    // gameplay scene happens to be active.
+    class AudioBootScene extends Phaser.Scene {
+      constructor() { super('AudioBoot'); }
+      create() {
+        this.scene.launch('Title');
+        preloadMusic(this);
+        this.load.start();
+      }
+    }
+
     class TitleScene extends Phaser.Scene {
       constructor() { super('Title'); }
-
-      preload() {
-        preloadMusic(this);
-      }
 
       create() {
         document.getElementById('loading').style.display = 'none';
@@ -3848,7 +3884,7 @@ CARS · CONES · POTHOLES: DODGE`, 11, '#f7f1dc')
           debug: false
         }
       },
-      scene: [TitleScene, CharacterSelectScene, MilwaukeeScene, HighwayScene, WildsScene, GlampingScene, CampgroundScene, ZooScene, HomewardScene, ChapterCompleteScene, FinaleScene]
+      scene: [AudioBootScene, TitleScene, CharacterSelectScene, MilwaukeeScene, HighwayScene, WildsScene, GlampingScene, CampgroundScene, ZooScene, HomewardScene, ChapterCompleteScene, FinaleScene]
     };
 
     installTouchControls();
