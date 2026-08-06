@@ -1,0 +1,3215 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <meta name="theme-color" content="#15131f" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="description" content="RV There Yet? A pixel-art family road trip game." />
+  <title>RV There Yet?</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #f7f1dc;
+      --panel: #161421;
+      --panel-2: #242034;
+      --accent: #f4c95d;
+      --accent-2: #78d6c6;
+      --danger: #e76f51;
+      --app-vw: 100vw;
+      --app-vh: 100dvh;
+      --control-cell: 48px;
+      --action-size: 82px;
+      --control-edge: 14px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+      margin: 0;
+      background:
+        radial-gradient(circle at 50% 10%, #332d49 0, #15131f 48%, #0b0a10 100%);
+      color: var(--ink);
+      font-family: "Courier New", Courier, monospace;
+      overflow: hidden;
+      touch-action: none;
+    }
+
+    body {
+      display: grid;
+      place-items: center;
+    }
+
+    #shell {
+      width: min(100vw, 1180px);
+      height: min(100vh, 760px);
+      padding: 10px;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 8px;
+    }
+
+    #topbar {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 0 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 700;
+    }
+
+    #topbar small {
+      opacity: 0.72;
+      font-size: 11px;
+      text-align: right;
+    }
+
+    #game-wrap {
+      position: relative;
+      min-height: 0;
+      border: 4px solid #07070b;
+      outline: 2px solid #4a435f;
+      background: #000;
+      box-shadow: 0 18px 60px rgba(0,0,0,.45);
+      overflow: hidden;
+    }
+
+    #game {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    #game canvas {
+      width: 100% !important;
+      height: 100% !important;
+      display: block;
+      object-fit: contain;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+
+    #loading {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      background: #15131f;
+      z-index: 20;
+      text-align: center;
+      padding: 20px;
+    }
+
+    #loading strong { color: var(--accent); }
+
+    #mobile-controls {
+      display: none;
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 12;
+    }
+
+    .pad, .action-zone {
+      position: absolute;
+      bottom: var(--control-edge);
+      pointer-events: none;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+
+    .pad {
+      left: var(--control-edge);
+      width: calc(var(--control-cell) * 3);
+      height: calc(var(--control-cell) * 3);
+      display: grid;
+      grid-template-columns: repeat(3, var(--control-cell));
+      grid-template-rows: repeat(3, var(--control-cell));
+    }
+
+    .action-zone {
+      right: var(--control-edge);
+      display: flex;
+      align-items: end;
+    }
+
+    .touch-btn {
+      pointer-events: auto;
+      touch-action: none;
+      border: 2px solid rgba(255,255,255,.72);
+      background: rgba(18,16,28,.88);
+      color: white;
+      border-radius: 12px;
+      font: 800 22px/1 "Courier New", monospace;
+      box-shadow: inset 0 0 0 2px rgba(0,0,0,.45), 0 2px 8px rgba(0,0,0,.25);
+      opacity: .18;
+      transition: opacity 80ms linear, transform 80ms linear, background-color 80ms linear;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .touch-btn:active, .touch-btn.active {
+      opacity: .50;
+      background: rgba(244,201,93,.94);
+      color: #17131d;
+      transform: translateY(1px) scale(.98);
+    }
+
+    .dir { width: var(--control-cell); height: var(--control-cell); }
+    [data-key="up"] { grid-column: 2; grid-row: 1; }
+    [data-key="left"] { grid-column: 1; grid-row: 2; }
+    [data-key="down"] { grid-column: 2; grid-row: 3; }
+    [data-key="right"] { grid-column: 3; grid-row: 2; }
+
+    .interact {
+      width: var(--action-size);
+      height: var(--action-size);
+      border-radius: 50%;
+      font-size: 34px;
+    }
+
+    #rotate-device {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      padding:
+        max(24px, env(safe-area-inset-top))
+        max(24px, env(safe-area-inset-right))
+        max(24px, env(safe-area-inset-bottom))
+        max(24px, env(safe-area-inset-left));
+      place-items: center;
+      background:
+        radial-gradient(circle at 50% 28%, #332d49 0, #15131f 52%, #0b0a10 100%);
+      text-align: center;
+    }
+
+    .rotate-card {
+      width: min(90vw, 430px);
+      padding: 28px 24px;
+      border: 3px solid #4a435f;
+      background: rgba(22,20,33,.96);
+      box-shadow: 0 18px 60px rgba(0,0,0,.5);
+    }
+
+    .rotate-phone {
+      width: 58px;
+      height: 96px;
+      margin: 0 auto 20px;
+      border: 5px solid var(--accent);
+      border-radius: 10px;
+      animation: rotate-phone 1.7s ease-in-out infinite;
+    }
+
+    .rotate-card strong {
+      display: block;
+      color: var(--accent);
+      font-size: 22px;
+      margin-bottom: 12px;
+    }
+
+    .rotate-card span {
+      color: var(--ink);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    @keyframes rotate-phone {
+      0%, 18% { transform: rotate(0deg); }
+      58%, 100% { transform: rotate(90deg); }
+    }
+
+    #footer {
+      text-align: center;
+      font-size: 11px;
+      opacity: .75;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    @media (hover: none), (pointer: coarse), (max-width: 820px) {
+      body {
+        position: fixed;
+        inset: 0 auto auto 0;
+        width: var(--app-vw);
+        height: var(--app-vh);
+        min-height: 0;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overscroll-behavior: none;
+      }
+
+      #shell {
+        width: 100%;
+        height: 100%;
+        max-width: none;
+        max-height: none;
+        padding:
+          env(safe-area-inset-top)
+          env(safe-area-inset-right)
+          env(safe-area-inset-bottom)
+          env(safe-area-inset-left);
+        gap: 0;
+        grid-template-rows: 0 1fr 0;
+        place-items: center;
+      }
+
+      #topbar, #footer {
+        overflow: hidden;
+        visibility: hidden;
+      }
+
+      #game-wrap {
+        width: 100%;
+        height: auto;
+        max-width: 100%;
+        max-height: 100%;
+        aspect-ratio: 16 / 9;
+        justify-self: center;
+        align-self: center;
+        border: 0;
+        outline: 0;
+        contain: layout paint size;
+      }
+
+      #mobile-controls { display: block; }
+    }
+
+    body.mobile-portrait #rotate-device { display: grid; }
+    body.mobile-portrait #shell { visibility: hidden; }
+
+    @media (orientation: portrait) and (hover: none),
+           (orientation: portrait) and (pointer: coarse) {
+      #rotate-device { display: grid; }
+      #shell { visibility: hidden; }
+    }
+  </style>
+</head>
+<body>
+  <main id="shell">
+    <header id="topbar">
+      <div>RV THERE YET?</div>
+      <small>WASD / ARROWS TO MOVE · E / SPACE TO INTERACT</small>
+    </header>
+
+    <section id="game-wrap" aria-label="RV There Yet game canvas">
+      <div id="game"></div>
+      <div id="loading"><div><strong>LOADING FAMILY CHAOS…</strong><br><br>Preparing one RV and several bad ideas.</div></div>
+
+      <div id="mobile-controls" aria-hidden="true">
+        <div class="pad">
+          <button class="touch-btn dir" data-key="up">▲</button>
+          <button class="touch-btn dir" data-key="left">◀</button>
+          <button class="touch-btn dir" data-key="down">▼</button>
+          <button class="touch-btn dir" data-key="right">▶</button>
+        </div>
+        <div class="action-zone">
+          <button class="touch-btn interact" data-key="interact" aria-label="Action button">A</button>
+        </div>
+      </div>
+    </section>
+
+    <footer id="footer">A Steinfeld–VanSomeron family vacation simulator. No actual RV security deposits were harmed.</footer>
+  </main>
+
+  <aside id="rotate-device" aria-live="polite">
+    <div class="rotate-card">
+      <div class="rotate-phone" aria-hidden="true"></div>
+      <strong>ROTATE YOUR DEVICE</strong>
+      <span>This family vacation is too chaotic for portrait mode. Turn your phone sideways to continue.</span>
+    </div>
+  </aside>
+
+  <!-- Mature, well-documented Phaser 3 branch; ideal for a no-build GitHub Pages prototype. -->
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
+  <script>
+  (() => {
+    'use strict';
+
+    const GAME_W = 960;
+    const GAME_H = 540;
+    const WORLD_W = 1600;
+    const WORLD_H = 1000;
+
+    const COLORS = {
+      ink: 0xf7f1dc,
+      dark: 0x17131d,
+      panel: 0x201c2d,
+      gold: 0xf4c95d,
+      teal: 0x78d6c6,
+      red: 0xe76f51,
+      grass: 0x6c9c59,
+      grass2: 0x78aa62,
+      road: 0x575563,
+      sidewalk: 0xb8b0a1,
+      house: 0xc8785b,
+      roof: 0x553d48,
+      rv: 0xe9e4d2,
+      rvBlue: 0x4d7ea8,
+      tree: 0x355e3b,
+      trunk: 0x735039
+    };
+
+    // ---------------------------------------------------------------------
+    // Character registry. `id` doubles as the sprite texture key generated
+    // in ensureTripTextures / MilwaukeeScene.createTextures.
+    // Gameplay `mods` are small numeric knobs applied uniformly wherever the
+    // relevant system runs (Family Harmony gain/loss, driving speed/impact
+    // forgiveness, interact radius) so every chapter feels different without
+    // each chapter needing bespoke logic per character.
+    // ---------------------------------------------------------------------
+    const CHARACTERS = {
+      jerad: {
+        id: 'jerad', name: 'Jerad Steinfeld', family: 'Steinfeld',
+        ability: 'Weaponized Sarcasm', abilityDesc: 'Distracts NPCs and reveals absurd dialogue options.',
+        personality: 'Good at improvising, terrible at recognizing when the joke is over.',
+        mods: { harmonyLossMult: 1.15, harmonyGainMult: 1.0, driveSpeedMult: 1.0, driveSkill: 1.0, obstacleForgiveMs: 60, interactBonus: -6, sarcasm: true }
+      },
+      megan: {
+        id: 'megan', name: 'Megan Steinfeld', family: 'Steinfeld',
+        ability: 'The Itinerary', abilityDesc: 'Reveals the fastest objective route and prevents scheduling disasters.',
+        personality: 'The competent leader attempting to manage seven freelance chaos consultants.',
+        mods: { harmonyLossMult: 0.8, harmonyGainMult: 1.0, driveSpeedMult: 1.0, driveSkill: 1.1, obstacleForgiveMs: 150, interactBonus: -4, itinerary: true }
+      },
+      renee: {
+        id: 'renee', name: 'Renee VanSomeron', family: 'VanSomeron',
+        ability: 'Chill Aura', abilityDesc: 'Gradually restores Family Harmony and improves cooperation from NPCs.',
+        personality: 'Calm enough to make everyone else briefly question why they\u2019re panicking.',
+        mods: { harmonyLossMult: 0.85, harmonyGainMult: 1.15, driveSpeedMult: 1.0, driveSkill: 1.05, obstacleForgiveMs: 120, interactBonus: 4, chillRegen: true }
+      },
+      mike: {
+        id: 'mike', name: 'Mike VanSomeron', family: 'VanSomeron',
+        ability: 'Counsel and Carry', abilityDesc: 'Moves heavy objects and charms officials into cooperating.',
+        personality: 'Former athlete, lawyer, politician, and current source of several avoidable situations.',
+        mods: { harmonyLossMult: 1.0, harmonyGainMult: 1.0, driveSpeedMult: 0.92, driveSkill: 1.05, obstacleForgiveMs: 250, interactBonus: -10, counsel: true }
+      },
+      cora: {
+        id: 'cora', name: 'Cora Steinfeld', family: 'Steinfeld',
+        ability: '\u2018I\u2019ll Handle It\u2019', abilityDesc: 'Assigns nearby kids tasks and temporarily takes command of group missions.',
+        personality: 'Thirteen years old and already disappointed by upper management.',
+        mods: { harmonyLossMult: 0.95, harmonyGainMult: 1.2, driveSpeedMult: 1.0, driveSkill: 0.85, obstacleForgiveMs: 0, interactBonus: 14, handleIt: true }
+      },
+      mae: {
+        id: 'mae', name: 'Mae Steinfeld', family: 'Steinfeld',
+        ability: 'Deadpan Detection', abilityDesc: 'Spots hidden objects, bad ideas, and dishonest NPCs.',
+        personality: 'Delivers emotionally devastating observations without changing her expression.',
+        mods: { harmonyLossMult: 0.9, harmonyGainMult: 1.0, driveSpeedMult: 1.0, driveSkill: 0.85, obstacleForgiveMs: 0, interactBonus: 24, deadpan: true }
+      },
+      mackenzie: {
+        id: 'mackenzie', name: 'Mackenzie VanSomeron', family: 'VanSomeron',
+        ability: 'Never Back Down', abilityDesc: 'Gains speed and strength after failing a mini-game.',
+        personality: 'Every activity becomes a competition, whether anyone agreed to compete or not.',
+        mods: { harmonyLossMult: 1.05, harmonyGainMult: 1.0, driveSpeedMult: 1.0, driveSkill: 0.85, obstacleForgiveMs: 0, interactBonus: 12, neverBackDown: true }
+      },
+      kennedy: {
+        id: 'kennedy', name: 'Kennedy VanSomeron', family: 'VanSomeron',
+        ability: 'Trailblazer', abilityDesc: 'Climbs, explores shortcuts, and discovers hidden areas.',
+        personality: 'Straightforward, adventurous, and usually halfway into the woods before the adults notice.',
+        mods: { harmonyLossMult: 1.0, harmonyGainMult: 1.0, driveSpeedMult: 1.08, driveSkill: 0.85, obstacleForgiveMs: 0, interactBonus: 28, trailblazer: true }
+      }
+    };
+    const CHARACTER_ORDER = ['jerad', 'megan', 'renee', 'mike', 'cora', 'mae', 'mackenzie', 'kennedy'];
+
+    // Relationship tone matrix: RELATION_TAG[speakerId][playerId] describes
+    // the flavor of speakerId's dialogue when the chosen player is playerId.
+    // Built directly from the family relationship notes.
+    const RELATION_TAG = {
+      jerad:      { megan: 'spouse', cora: 'kid-pushback', mae: 'kid-listens', renee: 'inlaw-easy', mike: 'peer-troll-mutual', mackenzie: 'troll-target', kennedy: 'fond-warm' },
+      megan:      { jerad: 'spouse', cora: 'kid-challenge', mae: 'kid-listens', renee: 'close-friend', mike: 'fond-respectful', mackenzie: 'fond-warm', kennedy: 'fond-warm' },
+      renee:      { mike: 'spouse', jerad: 'inlaw-easy', megan: 'close-friend', cora: 'warm', mae: 'warm', mackenzie: 'agreeable-warm', kennedy: 'patient-with-complaints' },
+      mike:       { renee: 'spouse', jerad: 'peer-troll-mutual', megan: 'fond-respectful', cora: 'tease-target-fond', mae: 'tease-target-deadpan', mackenzie: 'fond-dad', kennedy: 'fond-dad' },
+      cora:       { jerad: 'kid-pushback', megan: 'kid-challenge', mae: 'sibling-protective', renee: 'warm', mike: 'tease-fond', mackenzie: 'close-peer', kennedy: 'close-peer' },
+      mae:        { jerad: 'kid-listens', megan: 'kid-listens', cora: 'sibling-friction', renee: 'warm', mike: 'deadpan-tease', mackenzie: 'close-peer', kennedy: 'close-peer' },
+      mackenzie:  { renee: 'agreeable-warm', mike: 'fond-dad', kennedy: 'sibling-competitive', cora: 'close-peer', mae: 'close-peer', jerad: 'troll-target', megan: 'fond-warm' },
+      kennedy:    { renee: 'complains-to-parent', mike: 'fond-dad', mackenzie: 'sibling-competitive', cora: 'close-peer', mae: 'close-peer', jerad: 'fond-warm', megan: 'fond-warm' }
+    };
+
+    function relTag(speakerId, playerId) {
+      if (speakerId === playerId) return 'self';
+      return (RELATION_TAG[speakerId] && RELATION_TAG[speakerId][playerId]) || 'warm';
+    }
+
+    // Picks a dialogue sequence for `speakerId` talking to whoever is
+    // playing, given a bank of tone-tagged variants plus a default.
+    // bank[tag] is either one sequence (array of line strings) or several
+    // alternative sequences (array of arrays) to randomize between.
+    function relLine(speakerId, playerId, bank) {
+      const tag = relTag(speakerId, playerId);
+      let seq = bank[tag] || bank.default;
+      if (Array.isArray(seq) && Array.isArray(seq[0])) seq = Phaser.Utils.Array.GetRandom(seq);
+      return seq;
+    }
+
+    function charName(id) {
+      const c = CHARACTERS[id];
+      return c ? c.name.split(' ')[0] : id;
+    }
+
+    // Plain-language summary of the driving/perception mods, shown on the
+    // character select screen so the difficulty differences aren't hidden.
+    function difficultyBlurb(id) {
+      const mods = CHARACTERS[id].mods;
+      const drive = mods.driveSkill > 1 ? 'CONFIDENT DRIVER'
+        : mods.driveSkill < 1 ? 'NO LICENSE (YET)'
+        : 'AVERAGE DRIVER';
+      const spot = mods.interactBonus >= 20 ? 'SHARP-EYED'
+        : mods.interactBonus > 0 ? 'OBSERVANT'
+        : mods.interactBonus < -5 ? 'EASILY DISTRACTED'
+        : 'AVERAGE ATTENTION';
+      return `DRIVING: ${drive}   \u00B7   SPOTTING THINGS: ${spot}`;
+    }
+
+    // ---------------------------------------------------------------------
+    // Pets \u2014 Chapter 1 farewell side quest.
+    // ---------------------------------------------------------------------
+    const PETS = [
+      { id: 'fred', name: 'Fred', species: 'cat', x: 95, y: 300, note: 'Fred appears when it suits him. Today, apparently, it suits him.' },
+      { id: 'george', name: 'George', species: 'cat', x: 720, y: 590, note: 'George immediately files a formal request on behalf of all cats.' },
+      { id: 'gus', name: 'Gus', species: 'cat', x: 230, y: 600, note: 'Gus requires cleaning before departure. This is non-negotiable.' },
+      { id: 'rosie', name: 'Rosie', species: 'cat', x: 385, y: 340, note: 'Rosie supervises the goodbye personally. She has notes.' },
+      { id: 'ginny', name: 'Ginny', species: 'cat', x: 1540, y: 850, note: 'Ginny is hiding. Ginny is always hiding. This is Ginny\u2019s whole personality.' },
+      { id: 'buckley', name: 'Buckley', species: 'dog', x: 850, y: 640, note: 'Buckley joins the goodbye enthusiastically and without being asked.' },
+      { id: 'kingston', name: 'Kingston', species: 'dog', x: 1300, y: 630, note: 'Kingston is nervous about the suitcases but grateful for the attention.' }
+    ];
+
+    const touchState = {
+      up: false,
+      down: false,
+      left: false,
+      right: false,
+      interactPressed: false
+    };
+
+    let gameInstance = null;
+    let viewportFitFrame = 0;
+    let viewportFitTimer = 0;
+
+    const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+    const cssPixels = (styles, property) => Number.parseFloat(styles.getPropertyValue(property)) || 0;
+
+    function getVisibleViewport() {
+      const viewport = window.visualViewport;
+      return {
+        width: Math.max(1, viewport ? viewport.width : window.innerWidth),
+        height: Math.max(1, viewport ? viewport.height : window.innerHeight)
+      };
+    }
+
+    // Phaser's ScaleManager isn't necessarily ready the instant
+    // `new Phaser.Game(...)` returns (boot can finish a tick later), so a
+    // refresh() called too early can throw. This is purely a cosmetic
+    // auto-fit pass \u2014 later scheduled fits will succeed once booted \u2014
+    // so it's safe to swallow a not-ready failure instead of crashing.
+    function safeRefreshScale() {
+      if (!gameInstance?.scale || gameInstance.isBooted === false) {
+        scheduleViewportFit(120);
+        return;
+      }
+      try {
+        gameInstance.scale.refresh();
+      } catch (_) {
+        scheduleViewportFit(120);
+      }
+    }
+
+    function fitMobileGameWrap() {
+      const root = document.documentElement;
+      const shell = document.getElementById('shell');
+      const gameWrap = document.getElementById('game-wrap');
+      const mobileLayout = window.matchMedia('(hover: none), (pointer: coarse), (max-width: 820px)').matches;
+      const viewport = getVisibleViewport();
+
+      root.style.setProperty('--app-vw', `${Math.floor(viewport.width)}px`);
+      root.style.setProperty('--app-vh', `${Math.floor(viewport.height)}px`);
+      document.body.classList.toggle('mobile-layout', mobileLayout);
+      document.body.classList.toggle('mobile-portrait', mobileLayout && viewport.height > viewport.width);
+
+      if (!mobileLayout) {
+        gameWrap.style.width = '';
+        gameWrap.style.height = '';
+        root.style.removeProperty('--control-cell');
+        root.style.removeProperty('--action-size');
+        root.style.removeProperty('--control-edge');
+        safeRefreshScale();
+        return;
+      }
+
+      // The safe-area padding belongs to the shell. Subtract it once here;
+      // controls are already inside that safe rectangle and must not subtract it again.
+      const shellStyles = window.getComputedStyle(shell);
+      const horizontalPadding = cssPixels(shellStyles, 'padding-left') + cssPixels(shellStyles, 'padding-right');
+      const verticalPadding = cssPixels(shellStyles, 'padding-top') + cssPixels(shellStyles, 'padding-bottom');
+      const availableWidth = Math.max(1, viewport.width - horizontalPadding);
+      const availableHeight = Math.max(1, viewport.height - verticalPadding);
+      const scale = Math.min(availableWidth / GAME_W, availableHeight / GAME_H);
+      const width = Math.max(1, Math.floor(GAME_W * scale));
+      const height = Math.max(1, Math.floor(GAME_H * scale));
+
+      gameWrap.style.width = `${width}px`;
+      gameWrap.style.height = `${height}px`;
+
+      // Keep touch targets usable on small iPhones without letting them cover
+      // half the playfield, while preserving the larger controls on iPads.
+      const uiScale = clamp(height / GAME_H, 0.72, 1);
+      root.style.setProperty('--control-cell', `${clamp(Math.round(48 * uiScale), 40, 48)}px`);
+      root.style.setProperty('--action-size', `${clamp(Math.round(82 * uiScale), 64, 82)}px`);
+      root.style.setProperty('--control-edge', `${clamp(Math.round(14 * uiScale), 8, 14)}px`);
+
+      requestAnimationFrame(safeRefreshScale);
+    }
+
+    function scheduleViewportFit(delay = 180) {
+      cancelAnimationFrame(viewportFitFrame);
+      window.clearTimeout(viewportFitTimer);
+      viewportFitFrame = requestAnimationFrame(fitMobileGameWrap);
+      viewportFitTimer = window.setTimeout(fitMobileGameWrap, delay);
+    }
+
+    function installTouchControls() {
+      const activePointers = new Map();
+      const buttons = [...document.querySelectorAll('.touch-btn')];
+
+      const refreshKey = (key) => {
+        if (key === 'interact') return;
+        touchState[key] = [...activePointers.values()].includes(key);
+      };
+
+      const refreshButton = (button) => {
+        const key = button.dataset.key;
+        button.classList.toggle('active', [...activePointers.values()].includes(key));
+      };
+
+      const releasePointer = (event) => {
+        const key = activePointers.get(event.pointerId);
+        if (!key) return;
+        activePointers.delete(event.pointerId);
+        refreshKey(key);
+        buttons.filter((button) => button.dataset.key === key).forEach(refreshButton);
+      };
+
+      const resetControls = () => {
+        activePointers.clear();
+        touchState.up = false;
+        touchState.down = false;
+        touchState.left = false;
+        touchState.right = false;
+        touchState.interactPressed = false;
+        buttons.forEach((button) => button.classList.remove('active'));
+      };
+
+      buttons.forEach((button) => {
+        const key = button.dataset.key;
+
+        button.addEventListener('contextmenu', (event) => event.preventDefault());
+        button.addEventListener('pointerdown', (event) => {
+          if (event.pointerType === 'mouse' && event.button !== 0) return;
+          event.preventDefault();
+
+          try { button.setPointerCapture(event.pointerId); } catch (_) { /* Optional on older iOS. */ }
+          activePointers.set(event.pointerId, key);
+          button.classList.add('active');
+
+          if (key === 'interact') touchState.interactPressed = true;
+          else touchState[key] = true;
+        }, { passive: false });
+
+        button.addEventListener('pointerup', releasePointer, { passive: false });
+        button.addEventListener('pointercancel', releasePointer, { passive: false });
+        button.addEventListener('lostpointercapture', releasePointer, { passive: false });
+      });
+
+      window.addEventListener('blur', resetControls);
+      window.addEventListener('orientationchange', resetControls);
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) resetControls();
+      });
+    }
+
+
+    scheduleViewportFit(240);
+    window.addEventListener('resize', () => scheduleViewportFit(180), { passive: true });
+    window.addEventListener('orientationchange', () => scheduleViewportFit(520), { passive: true });
+    window.addEventListener('pageshow', () => scheduleViewportFit(240), { passive: true });
+    if (window.screen?.orientation?.addEventListener) {
+      window.screen.orientation.addEventListener('change', () => scheduleViewportFit(520));
+    }
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', () => scheduleViewportFit(180), { passive: true });
+      window.visualViewport.addEventListener('scroll', () => scheduleViewportFit(80), { passive: true });
+    }
+
+    function pixelText(scene, x, y, text, size = 16, color = '#f7f1dc') {
+      return scene.add.text(x, y, text, {
+        fontFamily: 'Courier New, monospace',
+        fontSize: `${size}px`,
+        fontStyle: 'bold',
+        color,
+        stroke: '#08070c',
+        strokeThickness: Math.max(2, Math.floor(size / 6)),
+        resolution: 2
+      }).setOrigin(0, 0);
+    }
+
+    class TitleScene extends Phaser.Scene {
+      constructor() { super('Title'); }
+
+      create() {
+        document.getElementById('loading').style.display = 'none';
+        this.cameras.main.setBackgroundColor('#15131f');
+        this.makeTitleArt();
+
+        const title = pixelText(this, GAME_W / 2, 95, 'RV THERE YET?', 48, '#f4c95d')
+          .setOrigin(0.5)
+          .setShadow(6, 6, '#000000', 0, false, true);
+
+        pixelText(this, GAME_W / 2, 148, 'THE STEINFELD–VANSOMERON FAMILY VACATION INCIDENT', 16, '#78d6c6')
+          .setOrigin(0.5);
+
+        const start = pixelText(this, GAME_W / 2, 400, '[ HIT THE ROAD ]', 24, '#ffffff')
+          .setOrigin(0.5)
+          .setInteractive({ useHandCursor: true });
+
+        pixelText(this, GAME_W / 2, 445, 'TOUCH PAD / WASD TO MOVE  ·  A / E TO INTERACT', 13, '#c7bfd8')
+          .setOrigin(0.5);
+
+        pixelText(this, GAME_W / 2, 480, 'FULL ROAD-TRIP EDITION · CHOOSE YOUR TRAVELER', 12, '#a59bb8')
+          .setOrigin(0.5);
+
+        this.tweens.add({
+          targets: start,
+          alpha: 0.4,
+          duration: 700,
+          yoyo: true,
+          repeat: -1
+        });
+
+        let launched = false;
+        const launch = () => {
+          if (launched) return;
+          launched = true;
+          this.scene.start('CharacterSelect');
+        };
+        start.on('pointerdown', launch);
+        if (this.input.keyboard) {
+          this.input.keyboard.once('keydown-SPACE', launch);
+          this.input.keyboard.once('keydown-ENTER', launch);
+          this.input.keyboard.once('keydown-E', launch);
+        }
+        this.input.once('pointerdown', (pointer) => {
+          if (pointer.y > 300) launch();
+        });
+      }
+
+      makeTitleArt() {
+        const g = this.add.graphics();
+        g.fillStyle(0x262237, 1).fillRect(0, 0, GAME_W, GAME_H);
+
+        // Sunset stripes.
+        const stripes = [0x614b66, 0x8d5c68, 0xc26f61, 0xe49c67];
+        stripes.forEach((c, i) => g.fillStyle(c, 1).fillRect(0, 30 + i * 35, GAME_W, 36));
+
+        // Road.
+        g.fillStyle(0x403e49, 1).fillRect(0, 280, GAME_W, 170);
+        g.fillStyle(0xf4c95d, 1);
+        for (let x = 0; x < GAME_W; x += 100) g.fillRect(x, 360, 55, 8);
+
+        // RV silhouette.
+        g.fillStyle(COLORS.rv, 1).fillRect(270, 220, 430, 140);
+        g.fillStyle(COLORS.rvBlue, 1).fillRect(300, 245, 130, 55);
+        g.fillRect(455, 245, 100, 55);
+        g.fillRect(580, 245, 85, 55);
+        g.fillStyle(0x2d2936, 1).fillRect(650, 305, 50, 55);
+        g.fillStyle(0xf4c95d, 1).fillRect(278, 310, 25, 12);
+        g.fillStyle(0x17131d, 1);
+        g.fillCircle(365, 365, 38).fillCircle(610, 365, 38);
+        g.fillStyle(0x85818d, 1);
+        g.fillCircle(365, 365, 16).fillCircle(610, 365, 16);
+
+        // Family-shaped blobs inside windows. A deliberately tiny sitcom tableau.
+        const heads = [0x3b261d, 0xe4c58b, 0xefd08d, 0x8a653e, 0x553425, 0x4a2a20, 0xe2c078, 0xe6c781];
+        heads.forEach((c, i) => {
+          const row = i < 4 ? 0 : 1;
+          const col = i % 4;
+          const px = 320 + col * 82;
+          const py = 260 + row * 38;
+          g.fillStyle(c, 1).fillCircle(px, py, 9);
+        });
+      }
+    }
+
+    class CharacterSelectScene extends Phaser.Scene {
+      constructor() { super('CharacterSelect'); }
+
+      create() {
+        ensureTripTextures(this);
+        this.cameras.main.setBackgroundColor('#15131f');
+        this.selected = null;
+        this.cards = [];
+
+        pixelText(this, GAME_W / 2, 30, 'WHO\u2019S DRIVING THIS DISASTER?', 26, '#f4c95d').setOrigin(0.5);
+        pixelText(this, GAME_W / 2, 58, 'PICK A TRAVELER \u2014 THEIR ABILITY, RELATIONSHIPS, AND LUCK ALL CHANGE THE TRIP', 11, '#a59bb8').setOrigin(0.5);
+
+        const cols = 4;
+        const cardW = 220;
+        const cardH = 138;
+        const gapX = 8;
+        const gapY = 10;
+        const startX = (GAME_W - (cardW * cols + gapX * (cols - 1))) / 2 + cardW / 2;
+        const startY = 148;
+
+        CHARACTER_ORDER.forEach((id, index) => {
+          const col = index % cols;
+          const row = Math.floor(index / cols);
+          const x = startX + col * (cardW + gapX);
+          const y = startY + row * (cardH + gapY);
+          this.buildCard(id, x, y, cardW, cardH);
+        });
+
+        this.detailBg = this.add.rectangle(GAME_W / 2, 480, GAME_W - 40, 112, COLORS.panel, .95)
+          .setStrokeStyle(3, 0x08070c);
+        this.detailName = pixelText(this, 32, 438, '', 16, '#f4c95d');
+        this.detailAbility = pixelText(this, 32, 460, '', 13, '#78d6c6').setWordWrapWidth(GAME_W - 260).setLineSpacing(3);
+        this.detailPersonality = pixelText(this, 32, 480, '', 12, '#f7f1dc').setWordWrapWidth(GAME_W - 260).setLineSpacing(3);
+        this.detailTraits = pixelText(this, 32, 517, '', 11, '#a59bb8');
+        this.confirmText = pixelText(this, GAME_W - 34, 480, '', 13, '#ffffff').setOrigin(1, 0.5);
+
+        this.selectCharacter('jerad');
+
+        if (this.input.keyboard) {
+          this.input.keyboard.on('keydown-E', () => this.confirmSelection());
+          this.input.keyboard.on('keydown-SPACE', () => this.confirmSelection());
+          this.input.keyboard.on('keydown-ENTER', () => this.confirmSelection());
+          const order = CHARACTER_ORDER;
+          const nudge = (delta) => {
+            const idx = Phaser.Math.Wrap(order.indexOf(this.selected) + delta, 0, order.length);
+            this.selectCharacter(order[idx]);
+          };
+          this.input.keyboard.on('keydown-LEFT', () => nudge(-1));
+          this.input.keyboard.on('keydown-RIGHT', () => nudge(1));
+          this.input.keyboard.on('keydown-UP', () => nudge(-4));
+          this.input.keyboard.on('keydown-DOWN', () => nudge(4));
+        }
+      }
+
+      buildCard(id, x, y, w, h) {
+        const data = CHARACTERS[id];
+        const bg = this.add.rectangle(x, y, w, h, COLORS.panel, .94).setStrokeStyle(3, 0x4a435f).setInteractive({ useHandCursor: true });
+        const portrait = this.add.image(x, y - 32, id).setScale(2.4);
+        const name = pixelText(this, x, y + 6, data.name.toUpperCase(), 12, '#f7f1dc').setOrigin(0.5);
+        const ability = pixelText(this, x, y + 26, data.ability.toUpperCase(), 10, '#78d6c6').setOrigin(0.5).setWordWrapWidth(w - 20).setAlign('center');
+        const family = pixelText(this, x, y - 60, data.family.toUpperCase(), 9, '#a59bb8').setOrigin(0.5);
+
+        const card = { id, bg, portrait, name, ability, family };
+        this.cards.push(card);
+
+        bg.on('pointerdown', () => {
+          if (this.selected === id) this.confirmSelection();
+          else this.selectCharacter(id);
+        });
+
+        return card;
+      }
+
+      selectCharacter(id) {
+        this.selected = id;
+        const data = CHARACTERS[id];
+        this.cards.forEach((card) => {
+          const active = card.id === id;
+          card.bg.setStrokeStyle(active ? 4 : 3, active ? 0xf4c95d : 0x4a435f);
+          card.bg.setFillStyle(active ? 0x2f2a41 : COLORS.panel, .94);
+        });
+        this.detailName.setText(data.name.toUpperCase());
+        this.detailAbility.setText(`${data.ability.toUpperCase()} \u2014 ${data.abilityDesc}`);
+        this.detailPersonality.setText(data.personality);
+        this.detailTraits.setText(difficultyBlurb(id));
+        this.confirmText.setText('[ E / TAP AGAIN ]\nHIT THE ROAD');
+      }
+
+      confirmSelection() {
+        if (!this.selected) return;
+        this.cameras.main.fadeOut(500, 20, 18, 29);
+        this.time.delayedCall(560, () => this.scene.start('Milwaukee', { character: this.selected }));
+      }
+    }
+
+    class MilwaukeeScene extends Phaser.Scene {
+      constructor() { super('Milwaukee'); }
+
+      init(data = {}) {
+        this.playerId = CHARACTERS[data.character] ? data.character : 'jerad';
+        this.playerData = CHARACTERS[this.playerId];
+        this.dialogueOpen = false;
+        this.currentInteractable = null;
+        this.interactLatch = false;
+        this.mission = {
+          luggage: 0,
+          charger: false,
+          headcount: new Set(),
+          meganBriefing: false,
+          boarded: false
+        };
+        this.sideQuest = { snacks: 0, complete: false };
+        this.petQuest = { pet: new Set(), gusRitual: 0, complete: false };
+        this.familyHarmony = Number.isFinite(data.harmony) ? data.harmony : 72;
+      }
+
+      // Applies the chosen character's harmony modifiers. Always route
+      // Family Harmony changes through this instead of touching
+      // familyHarmony directly so every chapter benefits automatically.
+      adjustHarmony(amount) {
+        const mods = this.playerData.mods;
+        const scaled = amount >= 0 ? amount * mods.harmonyGainMult : amount * mods.harmonyLossMult;
+        this.familyHarmony = Phaser.Math.Clamp(this.familyHarmony + scaled, 0, 100);
+        if (this.harmonyBar) {
+          this.harmonyBar.width = Math.max(0, 206 * (this.familyHarmony / 100));
+          if (this.familyHarmony < 35) this.harmonyBar.setFillStyle(COLORS.red);
+          else if (this.familyHarmony < 65) this.harmonyBar.setFillStyle(COLORS.gold);
+          else this.harmonyBar.setFillStyle(COLORS.teal);
+        }
+      }
+
+      create() {
+        this.createTextures();
+        this.createWorld();
+        this.createCharacters();
+        this.createItems();
+        this.createUI();
+        this.configureInput();
+        this.configureCamera();
+
+        document.getElementById('loading').style.display = 'none';
+
+        this.time.delayedCall(300, () => {
+          const openers = {
+            megan: ['All right. We leave as soon as the RV is packed and the kids are accounted for.', 'I already know I\u2019m the one who has to make that happen. So realistically, sometime Thursday.'],
+            default: [`All right. We leave as soon as the RV is packed, the kids are accounted for, and ${charName(this.playerId)} stops adding \u201Cemergency\u201D snacks.`, 'So realistically, sometime Thursday.']
+          };
+          this.say('Megan', this.playerId === 'megan' ? openers.megan : openers.default);
+        });
+      }
+
+      createTextures() {
+        // Grass checker tile.
+        const grass = this.make.graphics({ x: 0, y: 0, add: false });
+        grass.fillStyle(COLORS.grass, 1).fillRect(0, 0, 32, 32);
+        grass.fillStyle(COLORS.grass2, 1).fillRect(0, 0, 16, 16).fillRect(16, 16, 16, 16);
+        grass.generateTexture('grass-tile', 32, 32);
+        grass.destroy();
+
+        const makePerson = (key, shirt, hair, pants = 0x29324b) => {
+          const g = this.make.graphics({ x: 0, y: 0, add: false });
+          g.fillStyle(0x000000, 0.28).fillEllipse(12, 29, 18, 7);
+          g.fillStyle(pants, 1).fillRect(7, 20, 4, 8).fillRect(13, 20, 4, 8);
+          g.fillStyle(shirt, 1).fillRect(5, 10, 14, 12);
+          g.fillStyle(0xefc19a, 1).fillRect(7, 3, 10, 9);
+          g.fillStyle(hair, 1).fillRect(6, 1, 12, 5).fillRect(5, 4, 3, 5);
+          g.fillStyle(0x201a22, 1).fillRect(9, 7, 2, 2).fillRect(14, 7, 2, 2);
+          g.generateTexture(key, 24, 32);
+          g.destroy();
+        };
+
+        makePerson('jerad', 0x5f86c7, 0x2d211f);
+        makePerson('megan', 0xb35b8c, 0xe8c77e);
+        makePerson('renee', 0x6eb7a7, 0xf1d18b);
+        makePerson('mike', 0x9c6f44, 0x7d623d);
+        makePerson('cora', 0xd46b5f, 0x503126);
+        makePerson('mae', 0x66588f, 0x4a2b22);
+        makePerson('mackenzie', 0xefa94a, 0xe4c070);
+        makePerson('kennedy', 0x4aa0a8, 0xe9c87d);
+
+        const itemTexture = (key, draw) => {
+          const g = this.make.graphics({ x: 0, y: 0, add: false });
+          draw(g);
+          g.generateTexture(key, 32, 32);
+          g.destroy();
+        };
+
+        itemTexture('suitcase', (g) => {
+          g.fillStyle(0x000000, .25).fillEllipse(16, 27, 24, 6);
+          g.fillStyle(0x34313c, 1).fillRect(6, 8, 20, 17);
+          g.fillStyle(0xe76f51, 1).fillRect(8, 10, 16, 13);
+          g.fillStyle(0x34313c, 1).fillRect(12, 4, 8, 5);
+          g.fillStyle(0xf4c95d, 1).fillRect(14, 15, 4, 3);
+        });
+
+        itemTexture('charger', (g) => {
+          g.lineStyle(4, 0xf7f1dc, 1).strokeCircle(14, 16, 8);
+          g.fillStyle(0x35313d, 1).fillRect(19, 7, 8, 10);
+          g.fillStyle(0xf7f1dc, 1).fillRect(21, 4, 2, 4).fillRect(25, 4, 2, 4);
+        });
+
+        itemTexture('snack', (g) => {
+          g.fillStyle(0x000000, .22).fillEllipse(16, 27, 22, 5);
+          g.fillStyle(0xf4c95d, 1).fillRect(7, 6, 18, 20);
+          g.fillStyle(0xe76f51, 1).fillRect(7, 10, 18, 5);
+          g.fillStyle(0x4a8e74, 1).fillRect(11, 18, 10, 4);
+        });
+
+        itemTexture('pet-cat', (g) => {
+          g.fillStyle(0x000000, .22).fillEllipse(16, 27, 22, 6);
+          g.fillStyle(0x6d5a48, 1).fillEllipse(16, 20, 20, 12);
+          g.fillTriangle(6, 14, 10, 4, 14, 14);
+          g.fillTriangle(18, 14, 22, 4, 26, 14);
+          g.fillCircle(16, 14, 8);
+          g.fillStyle(0x2a221c, 1).fillCircle(13, 13, 1.4).fillCircle(19, 13, 1.4);
+          g.fillStyle(0xd8c9b0, 1).fillEllipse(16, 17, 6, 3);
+        });
+
+        itemTexture('pet-dog', (g) => {
+          g.fillStyle(0x000000, .22).fillEllipse(16, 28, 24, 6);
+          g.fillStyle(0xc98f52, 1).fillEllipse(16, 19, 22, 14);
+          g.fillCircle(16, 11, 9);
+          g.fillStyle(0x8a5c2b, 1).fillEllipse(7, 11, 6, 11).fillEllipse(25, 11, 6, 11);
+          g.fillStyle(0x2a221c, 1).fillCircle(13, 10, 1.4).fillCircle(19, 10, 1.4);
+          g.fillStyle(0x2a221c, 1).fillEllipse(16, 15, 3, 2);
+        });
+      }
+
+      createWorld() {
+        this.add.tileSprite(WORLD_W / 2, WORLD_H / 2, WORLD_W, WORLD_H, 'grass-tile');
+        const g = this.add.graphics();
+
+        // Street and sidewalk.
+        g.fillStyle(COLORS.road, 1).fillRect(0, 690, WORLD_W, 310);
+        g.fillStyle(0x76737f, 1).fillRect(0, 700, WORLD_W, 8);
+        g.fillStyle(COLORS.sidewalk, 1).fillRect(0, 620, WORLD_W, 70);
+        g.fillStyle(0xd5ccba, 1);
+        for (let x = 0; x < WORLD_W; x += 96) g.fillRect(x, 622, 3, 66);
+        g.fillStyle(0xf4c95d, 1);
+        for (let x = 20; x < WORLD_W; x += 130) g.fillRect(x, 842, 72, 10);
+
+        // Driveway.
+        g.fillStyle(0x8f8a89, 1).fillRect(650, 300, 390, 390);
+        g.lineStyle(3, 0x716c6d, 1);
+        for (let y = 330; y < 690; y += 70) g.lineBetween(650, y, 1040, y);
+
+        // House.
+        g.fillStyle(COLORS.house, 1).fillRect(130, 115, 520, 385);
+        g.fillStyle(COLORS.roof, 1).fillRect(105, 90, 570, 70);
+        g.fillStyle(0x3f718e, 1).fillRect(190, 210, 110, 95).fillRect(465, 210, 110, 95);
+        g.fillStyle(0x181821, 1).fillRect(332, 290, 112, 210);
+        g.fillStyle(0xe9e4d2, 1).fillRect(346, 307, 84, 193);
+        g.fillStyle(0xf4c95d, 1).fillCircle(417, 400, 5);
+
+        // Porch and front walk.
+        g.fillStyle(0x77707a, 1).fillRect(300, 500, 180, 70);
+        g.fillStyle(0xb8b0a1, 1).fillRect(365, 570, 50, 120);
+
+        // Garage.
+        g.fillStyle(0xb7a293, 1).fillRect(650, 150, 320, 220);
+        g.fillStyle(0xddd4c5, 1).fillRect(690, 205, 240, 165);
+        g.lineStyle(3, 0x968d84, 1);
+        for (let y = 225; y < 370; y += 28) g.lineBetween(690, y, 930, y);
+
+        // RV.
+        g.fillStyle(0x0b0a10, .25).fillEllipse(1195, 525, 410, 110);
+        g.fillStyle(COLORS.rv, 1).fillRect(1040, 345, 410, 170);
+        g.fillStyle(COLORS.rvBlue, 1).fillRect(1065, 370, 105, 60).fillRect(1190, 370, 90, 60).fillRect(1300, 370, 115, 60);
+        g.fillStyle(0x2a2732, 1).fillRect(1375, 430, 75, 85);
+        g.fillStyle(0x2a2732, 1).fillCircle(1135, 525, 42).fillCircle(1365, 525, 42);
+        g.fillStyle(0x8f8a98, 1).fillCircle(1135, 525, 18).fillCircle(1365, 525, 18);
+        g.fillStyle(0xe76f51, 1).fillRect(1038, 460, 10, 25);
+        pixelText(this, 1175, 445, `RENTAL\nBEHEMOTH`, 14, '#385b7a').setDepth(2);
+
+        // Picnic table / neighborhood set dressing.
+        g.fillStyle(0x6d4d34, 1).fillRect(1110, 170, 170, 22).fillRect(1135, 140, 120, 22);
+        g.fillRect(1140, 190, 12, 50).fillRect(1235, 190, 12, 50);
+
+        // Trees.
+        this.treePositions = [[65,135],[90,450],[1030,120],[1450,130],[1510,590],[1230,660],[520,80]];
+        this.treePositions.forEach(([x,y]) => {
+          g.fillStyle(COLORS.trunk, 1).fillRect(x - 8, y, 16, 50);
+          g.fillStyle(COLORS.tree, 1).fillCircle(x, y, 42);
+          g.fillStyle(0x477c49, 1).fillCircle(x - 18, y - 8, 23).fillCircle(x + 19, y - 10, 25);
+        });
+
+        // Flower dots and yard clutter.
+        const flowerColors = [0xf4c95d, 0xffffff, 0xe76f51, 0x9b7ede];
+        for (let i = 0; i < 65; i++) {
+          const x = Phaser.Math.Between(20, WORLD_W - 20);
+          const y = Phaser.Math.Between(20, 610);
+          if ((x > 100 && x < 1000 && y > 80 && y < 570) || (x > 1030 && x < 1480 && y > 320 && y < 560)) continue;
+          g.fillStyle(Phaser.Utils.Array.GetRandom(flowerColors), .85).fillRect(x, y, 4, 4);
+        }
+
+        // Physics walls.
+        this.walls = this.physics.add.staticGroup();
+        // House \u2014 solid except for the front door gap (matches the door
+        // graphic drawn at 332,290,112,210) so it's actually enterable.
+        this.addWall(390, 190, 520, 200); // house, above the door
+        this.addWall(231, 395, 202, 210); // house, left of the door
+        this.addWall(547, 395, 206, 210); // house, right of the door
+        this.addWall(810, 255, 320, 230); // garage
+        this.addWall(1245, 430, 410, 180); // RV body
+        this.treePositions.forEach(([x, y]) => this.addWall(x, y + 18, 50, 55));
+        this.addWall(WORLD_W / 2, -10, WORLD_W, 20);
+        this.addWall(WORLD_W / 2, WORLD_H + 10, WORLD_W, 20);
+        this.addWall(-10, WORLD_H / 2, 20, WORLD_H);
+        this.addWall(WORLD_W + 10, WORLD_H / 2, 20, WORLD_H);
+      }
+
+      addWall(x, y, w, h) {
+        const wall = this.add.rectangle(x, y, w, h, 0x000000, 0);
+        this.physics.add.existing(wall, true);
+        this.walls.add(wall);
+        return wall;
+      }
+
+      createCharacters() {
+        this.player = this.physics.add.sprite(405, 600, this.playerId).setDepth(20);
+        this.player.setCollideWorldBounds(true);
+        this.player.body.setSize(15, 17).setOffset(5, 13);
+        this.player.nameTag = this.playerData.name.split(' ')[0];
+        this.physics.add.collider(this.player, this.walls);
+
+        this.npcs = [];
+        // Every family member's headcount line is chosen from a bank keyed
+        // by their relationship to whoever is playing \u2014 so Mackenzie
+        // needles Jerad, Cora pushes back on her actual parents, etc.
+        const npcData = [
+          { key: 'megan', x: 780, y: 425, bank: {
+            spouse: [['Route\u2019s saved, reservation\u2019s confirmed, backups are printed.', 'Your one job is luggage. I chose something achievable for you.']],
+            'kid-challenge': [['You\u2019re on luggage duty. Yes, I know you have opinions about that. No, they don\u2019t change the assignment.']],
+            'kid-listens': [['Luggage duty for you \u2014 should be simple. Thank you for not making this complicated.']],
+            'close-friend': [['Route\u2019s saved, reservation\u2019s confirmed. I\u2019d trust you to run this whole operation if I weren\u2019t already doing it.']],
+            default: [['The route is saved, the reservation is confirmed, and I have printed backups.', 'Luggage duty is open. Try to make it look intentional.']]
+          }},
+          { key: 'renee', x: 1145, y: 230, bank: {
+            spouse: [['Mike says he packed light. His duffel bag has developed its own weather system.', 'I\u2019m staying relaxed until he starts introducing it to people.']],
+            'inlaw-easy': [['Mike says he packed light. I\u2019ve seen the duffel. I\u2019ve chosen peace instead of an argument.']],
+            'close-friend': [['I\u2019m staying calm on purpose today. Somebody has to model it for the group text.']],
+            warm: [['Mike packed \u201Clight,\u201D which is doing a lot of work as a description.', 'I\u2019m staying relaxed until proven otherwise.']],
+            'patient-with-complaints': [['I know, I know \u2014 tell me what\u2019s wrong and I\u2019ll pretend it\u2019s fixable.']],
+            default: [['Mike says he packed light. His duffel bag has developed its own weather system.', 'I\u2019m staying relaxed until he starts introducing it to people.']]
+          }},
+          { key: 'mike', x: 1265, y: 250, bank: {
+            spouse: [['I already shook the rental agent\u2019s hand twice. Really felt like we connected.', 'Big trip energy. I can feel it already.']],
+            'peer-troll-mutual': [['I gave the rental guy a whole speech about our itinerary. He seemed thrilled. Or trapped. Hard to say.', 'Mock all you want \u2014 I found us the best parking spot on the block, blindfolded, emotionally.']],
+            'tease-target-fond': [['I gave the rental office a little pep talk on the way out. I think morale is up.']],
+            'tease-target-deadpan': [['I have delivered brief, unrequested remarks to the rental staff. I anticipate a one-sentence dismantling of that fact from you shortly.']],
+            'fond-dad': [['I high-fived the rental guy. He didn\u2019t ask for it, but I could tell he needed it.']],
+            default: [['I gave the whole family a pep talk in the driveway.', 'Nobody asked for it. Everybody needed it. That\u2019s public service.']]
+          }},
+          { key: 'cora', x: 540, y: 575, bank: {
+            'kid-pushback': [['I made a seating chart because apparently leadership was vacant.', 'You tried to filibuster. I gave you a middle seat and called it settled.']],
+            'kid-challenge': [['I made a seating chart. You\u2019re welcome to appeal it, but I\u2019ve already denied the appeal.']],
+            'tease-fond': [['I made a seating chart. You tried to filibuster. I gave you a middle seat and called the matter settled.']],
+            'close-peer': [['I made a seating chart. Want to co-sign it so it looks official?']],
+            'sibling-protective': [['I made a seating chart and put you somewhere you\u2019ll actually be comfortable. Don\u2019t make it weird.']],
+            default: [['I made a seating chart because apparently leadership was vacant.', 'Objections were filed. Objections were denied.']]
+          }},
+          { key: 'mae', x: 250, y: 550, bank: {
+            'kid-listens': [['Mike has declared three packing decisions \u201Ctime-honored family tradition.\u201D None of them are older than twenty minutes.', 'Everyone keeps saying this will be relaxing. I admire the commitment to fiction.']],
+            'sibling-friction': [['Mike\u2019s declared the cooler placement a great American tradition. I\u2019d ask Cora what she thinks, but we\u2019re not really speaking about the RV beds right now.']],
+            'deadpan-tease': [['You\u2019ve called three packing decisions \u201Ctradition\u201D so far. I\u2019m keeping a list.']],
+            'close-peer': [['Mike\u2019s already declared tradition on the packing. Want to start a betting pool on how long that lasts?']],
+            default: [['Mike has declared three packing decisions \u201Ctime-honored family tradition.\u201D None of them are older than twenty minutes.', 'Everyone keeps saying this will be relaxing. I admire the commitment to fiction.']]
+          }},
+          { key: 'mackenzie', x: 930, y: 580, bank: {
+            'troll-target': [['You said you packed efficiently. That\u2019s why three bags are labeled \u201Cmiscellaneous.\u201D', 'I call first pick of the RV beds. Take it up with Mike \u2014 he\u2019ll just give a speech about fairness and forget to decide.']],
+            'agreeable-warm': [['I call first pick of the RV beds. You\u2019re not going to fight me on that, right?']],
+            'sibling-competitive': [['First pick of the RV beds is mine. I will be defending that claim from you specifically.']],
+            'close-peer': [['I\u2019m claiming the best RV bed before anyone can organize a counter-proposal. Back me up?']],
+            'fond-dad': [['I\u2019m claiming first pick of the RV beds. You can lobby for a recount. It won\u2019t work.']],
+            'fond-warm': [['First pick of the RV beds, no debate. I already decided.']],
+            default: [['Somebody packed three bags labeled \u201Cmiscellaneous.\u201D I call first pick of the RV beds regardless.']]
+          }},
+          { key: 'kennedy', x: 1090, y: 620, bank: {
+            'fond-warm': [['There\u2019s a trail behind the campground on the map.', 'I\u2019m going there before Mike forms a committee and gives it opening remarks.']],
+            'complains-to-parent': [['There\u2019s a trail behind the campground. I already told Mom I\u2019m checking it out first, for the record.']],
+            'fond-dad': [['There\u2019s a trail behind the campground. I\u2019m scouting it before you turn it into a ribbon-cutting.']],
+            'sibling-competitive': [['There\u2019s a trail behind the campground and I\u2019m getting there before you do.']],
+            'close-peer': [['There\u2019s a trail behind the campground. Come find it with me before the adults notice.']],
+            default: [['There\u2019s a trail behind the campground on the map.', 'I\u2019m going there before anyone forms a committee about it.']]
+          }}
+        ];
+
+        npcData
+          .filter((data) => data.key !== this.playerId)
+          .forEach((data) => {
+            const displayName = charName(data.key);
+            const sprite = this.physics.add.staticSprite(data.x, data.y, data.key).setDepth(19);
+            sprite.body.setSize(17, 18).setOffset(4, 12);
+            sprite.interact = () => {
+              this.mission.headcount.add(displayName);
+              this.say(displayName, relLine(data.key, this.playerId, data.bank), () => this.updateMission());
+            };
+            sprite.prompt = `TALK TO ${displayName.toUpperCase()}`;
+            sprite.displayName = displayName;
+            sprite.charId = data.key;
+            this.npcs.push(sprite);
+          });
+
+        this.physics.add.collider(this.player, this.npcs);
+      }
+
+      createItems() {
+        this.interactables = [...this.npcs];
+
+        const addPickup = (x, y, texture, prompt, onPickup) => {
+          const item = this.physics.add.staticSprite(x, y, texture).setDepth(15);
+          item.prompt = prompt;
+          item.interact = () => {
+            if (!item.active) return;
+            onPickup(item);
+          };
+          this.interactables.push(item);
+          this.tweens.add({ targets: item, y: y - 4, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+          return item;
+        };
+
+        [
+          [345, 530],
+          [900, 410],
+          [1165, 315]
+        ].forEach(([x, y], index) => addPickup(x, y, 'suitcase', `PICK UP LUGGAGE ${index + 1}`, (item) => {
+          item.disableBody(true, true);
+          this.mission.luggage += 1;
+          this.adjustHarmony(3);
+          this.say(charName(this.playerId), [
+            Phaser.Utils.Array.GetRandom([
+              'One bag down. It contains either clothing or twelve hardcover books. There is no middle ground.',
+              'Luggage acquired. My back has submitted a formal complaint.',
+              'Excellent. Another rectangular object that somehow weighs more than a child.'
+            ])
+          ], () => this.updateMission());
+        }));
+
+        addPickup(535, 545, 'charger', 'RECOVER THE SACRED CHARGER', (item) => {
+          item.disableBody(true, true);
+          this.mission.charger = true;
+          this.adjustHarmony(8);
+          this.say(this.playerId === 'mae' ? 'Kennedy' : 'Mae', relLine(this.playerId === 'mae' ? 'kennedy' : 'mae', this.playerId, {
+            self: ['Found my own charger. Deadpan Detection: occasionally aimed at furniture.'],
+            'kid-listens': ['You found the charger.', 'Civilization may continue for another six hours.'],
+            'sibling-friction': [`Found it before Cora did. I\u2019ll allow myself one (1) smile about that.`],
+            'close-peer': [`Charger recovered. ${charName(this.playerId)} gets full credit and zero surprise from me.`],
+            'deadpan-tease': ['The charger was found. Mike\u2019s campaign for charger custody has been suspended indefinitely.'],
+            default: ['The charger has been recovered.', 'Civilization may continue for another six hours.']
+          }), () => this.updateMission());
+        });
+
+        [
+          [160, 555],
+          [1000, 250],
+          [1480, 625]
+        ].forEach(([x, y]) => addPickup(x, y, 'snack', 'HIDE EMERGENCY SNACK', (item) => {
+          item.disableBody(true, true);
+          this.sideQuest.snacks += 1;
+          this.say(this.playerData.name.split(' ')[0], [
+            this.sideQuest.snacks < 3
+              ? `Emergency snack ${this.sideQuest.snacks} secured. \u201CEmergency\u201D remains intentionally undefined.`
+              : `All emergency snacks hidden. Future ${charName(this.playerId)} has been irresponsibly supported.`
+          ], () => {
+            if (this.sideQuest.snacks === 3) {
+              this.sideQuest.complete = true;
+              this.adjustHarmony(5);
+            }
+            this.updateMission();
+          });
+        }));
+
+        // RV door interaction is separate because the door is part of a collider.
+        const rvDoor = this.add.zone(1375, 520, 95, 120);
+        this.physics.add.existing(rvDoor, true);
+        rvDoor.prompt = 'BOARD THE RENTAL BEHEMOTH';
+        rvDoor.interact = () => this.tryBoardRV();
+        this.interactables.push(rvDoor);
+
+        this.createPetFarewellQuest();
+      }
+
+      // Side quest: "Say Goodbye to the Pets." Find and pet all seven
+      // animals before boarding. Ranked by how many you get \u2014 Family
+      // Harmony scales with completion, and Gus (Jerad's cat) won't let
+      // Jerad leave until he's been properly fussed over twice.
+      createPetFarewellQuest() {
+        PETS.forEach((pet) => {
+          const texture = pet.species === 'dog' ? 'pet-dog' : 'pet-cat';
+          const sprite = this.physics.add.staticSprite(pet.x, pet.y, texture).setDepth(16);
+          sprite.prompt = `PET ${pet.name.toUpperCase()} GOODBYE`;
+          const label = pixelText(this, pet.x, pet.y - 22, pet.name.toUpperCase(), 10, '#f7f1dc').setOrigin(0.5).setDepth(17);
+          this.tweens.add({ targets: [sprite, label], y: '-=4', duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+
+          sprite.interact = () => {
+            if (this.petQuest.pet.has(pet.id)) {
+              this.say(pet.name, [`${pet.name} has already been properly said goodbye to. Further affection is optional but accepted.`]);
+              return;
+            }
+
+            // Gus specifically holds up Jerad's departure until "cleaned" twice.
+            if (pet.id === 'gus' && this.playerId === 'jerad') {
+              this.petQuest.gusRitual += 1;
+              if (this.petQuest.gusRitual < 2) {
+                this.say('Jerad', ['Gus requires cleaning before I\u2019m allowed to leave.', 'This is ritual, not hygiene. Round one of two.']);
+                return;
+              }
+              this.say('Jerad', ['Gus has been cleaned to his exact specifications.', 'I am now permitted to go on vacation. Gus remains unbothered either way.']);
+            } else if (pet.id === 'rosie' && this.playerId === 'megan') {
+              this.say('Megan', ['Rosie insists on supervising my goodbye specifically, and honestly, fair.']);
+            } else {
+              this.say(charName(this.playerId), [pet.note]);
+            }
+
+            this.petQuest.pet.add(pet.id);
+            const bonus = pet.id === 'rosie' && this.playerId === 'megan' ? 3
+              : pet.id === 'gus' && this.playerId === 'jerad' ? 3
+              : 1.5;
+            this.adjustHarmony(bonus);
+
+            if (this.petQuest.pet.size === PETS.length && !this.petQuest.complete) {
+              this.petQuest.complete = true;
+              this.adjustHarmony(6);
+              this.time.delayedCall(50, () => this.say('Cora', ['Every pet has been said goodbye to.', 'I am formally logging this as the most organized part of this entire departure.']));
+            }
+            this.updateMission();
+          };
+          this.interactables.push(sprite);
+        });
+      }
+
+      createUI() {
+        this.hud = this.add.container(0, 0).setScrollFactor(0).setDepth(200);
+
+        const objectiveBg = this.add.rectangle(16, 16, 335, 145, COLORS.panel, .94)
+          .setOrigin(0)
+          .setStrokeStyle(3, 0x08070c);
+        const harmonyBg = this.add.rectangle(GAME_W - 260, 16, 244, 56, COLORS.panel, .94)
+          .setOrigin(0)
+          .setStrokeStyle(3, 0x08070c);
+        this.hud.add([objectiveBg, harmonyBg]);
+
+        this.objectiveTitle = pixelText(this, 30, 28, 'MAIN OBJECTIVE', 15, '#f4c95d').setScrollFactor(0).setDepth(201);
+        this.objectiveText = pixelText(this, 30, 53, '', 13, '#f7f1dc').setScrollFactor(0).setDepth(201).setLineSpacing(5).setWordWrapWidth(300);
+        this.harmonyLabel = pixelText(this, GAME_W - 245, 27, 'FAMILY HARMONY', 13, '#78d6c6').setScrollFactor(0).setDepth(201);
+        this.harmonyBarBg = this.add.rectangle(GAME_W - 244, 49, 210, 11, 0x08070c, 1).setOrigin(0).setScrollFactor(0).setDepth(201);
+        this.harmonyBar = this.add.rectangle(GAME_W - 242, 51, 206, 7, COLORS.teal, 1).setOrigin(0).setScrollFactor(0).setDepth(202);
+        this.hud.add([this.objectiveTitle, this.objectiveText, this.harmonyLabel, this.harmonyBarBg, this.harmonyBar]);
+
+        this.promptBg = this.add.rectangle(GAME_W / 2, GAME_H - 82, 430, 42, COLORS.dark, .92)
+          .setScrollFactor(0).setDepth(209).setVisible(false).setStrokeStyle(3, 0xf4c95d);
+        this.promptText = pixelText(this, GAME_W / 2, GAME_H - 82, '', 14, '#ffffff')
+          .setOrigin(.5).setScrollFactor(0).setDepth(210).setVisible(false);
+
+        this.dialogueBg = this.add.rectangle(30, GAME_H - 160, GAME_W - 60, 130, COLORS.panel, .98)
+          .setOrigin(0).setScrollFactor(0).setDepth(220).setVisible(false).setStrokeStyle(4, 0x08070c);
+        this.speakerText = pixelText(this, 52, GAME_H - 145, '', 17, '#f4c95d')
+          .setScrollFactor(0).setDepth(221).setVisible(false);
+        this.dialogueText = pixelText(this, 52, GAME_H - 114, '', 16, '#f7f1dc')
+          .setScrollFactor(0).setDepth(221).setVisible(false).setWordWrapWidth(GAME_W - 105);
+        this.continueText = pixelText(this, GAME_W - 66, GAME_H - 48, '▼', 16, '#78d6c6')
+          .setOrigin(1).setScrollFactor(0).setDepth(221).setVisible(false);
+
+        this.updateMission();
+      }
+
+      configureInput() {
+        const keyboard = this.input.keyboard;
+        this.cursors = keyboard ? keyboard.createCursorKeys() : {};
+        this.keys = keyboard ? keyboard.addKeys({
+          up: Phaser.Input.Keyboard.KeyCodes.W,
+          down: Phaser.Input.Keyboard.KeyCodes.S,
+          left: Phaser.Input.Keyboard.KeyCodes.A,
+          right: Phaser.Input.Keyboard.KeyCodes.D,
+          interact: Phaser.Input.Keyboard.KeyCodes.E,
+          interactAlt: Phaser.Input.Keyboard.KeyCodes.SPACE
+        }) : {};
+      }
+
+      configureCamera() {
+        this.cameras.main.setBounds(0, 0, WORLD_W, WORLD_H);
+        this.cameras.main.startFollow(this.player, true, .12, .12);
+        this.cameras.main.setRoundPixels(true);
+        this.physics.world.setBounds(0, 0, WORLD_W, WORLD_H);
+      }
+
+      update() {
+        // Renee's Chill Aura: slow passive harmony trickle.
+        if (this.playerData.mods.chillRegen) {
+          const now = this.time.now;
+          if (!this.lastChillTick) this.lastChillTick = now;
+          else if (now - this.lastChillTick >= 4000) {
+            this.lastChillTick = now;
+            this.adjustHarmony(1);
+          }
+        }
+
+        const pressed = (this.keys.interact && Phaser.Input.Keyboard.JustDown(this.keys.interact)) ||
+          (this.keys.interactAlt && Phaser.Input.Keyboard.JustDown(this.keys.interactAlt)) || touchState.interactPressed;
+        touchState.interactPressed = false;
+
+        if (this.dialogueOpen) {
+          this.player.setVelocity(0);
+          if (pressed) this.advanceDialogue();
+          return;
+        }
+
+        const left = Boolean(this.cursors.left?.isDown || this.keys.left?.isDown || touchState.left);
+        const right = Boolean(this.cursors.right?.isDown || this.keys.right?.isDown || touchState.right);
+        const up = Boolean(this.cursors.up?.isDown || this.keys.up?.isDown || touchState.up);
+        const down = Boolean(this.cursors.down?.isDown || this.keys.down?.isDown || touchState.down);
+
+        const velocity = new Phaser.Math.Vector2(
+          (right ? 1 : 0) - (left ? 1 : 0),
+          (down ? 1 : 0) - (up ? 1 : 0)
+        );
+
+        if (velocity.lengthSq() > 0) {
+          velocity.normalize().scale(180);
+          this.player.setVelocity(velocity.x, velocity.y);
+          this.player.setFlipX(velocity.x < 0);
+          this.player.rotation = Math.sin(this.time.now / 75) * .035;
+        } else {
+          this.player.setVelocity(0);
+          this.player.rotation = 0;
+        }
+
+        this.findNearestInteractable();
+        if (pressed && this.currentInteractable) this.currentInteractable.interact();
+      }
+
+      findNearestInteractable() {
+        let nearest = null;
+        let nearestDistance = 78 + (this.playerData?.mods?.interactBonus || 0);
+
+        this.interactables.forEach((obj) => {
+          if (!obj.active) return;
+          const distance = Phaser.Math.Distance.Between(this.player.x, this.player.y, obj.x, obj.y);
+          if (distance < nearestDistance) {
+            nearestDistance = distance;
+            nearest = obj;
+          }
+        });
+
+        this.currentInteractable = nearest;
+        const visible = Boolean(nearest);
+        this.promptBg.setVisible(visible);
+        this.promptText.setVisible(visible);
+        if (nearest) this.promptText.setText(`[ A / E ] ${nearest.prompt}`);
+      }
+
+      say(speaker, lines, onComplete = null) {
+        this.dialogueOpen = true;
+        this.dialogueQueue = [...lines];
+        this.dialogueOnComplete = onComplete;
+        this.speakerText.setText(speaker.toUpperCase());
+        this.dialogueBg.setVisible(true);
+        this.speakerText.setVisible(true);
+        this.dialogueText.setVisible(true);
+        this.continueText.setVisible(true);
+        this.promptBg.setVisible(false);
+        this.promptText.setVisible(false);
+        this.showNextDialogueLine();
+      }
+
+      showNextDialogueLine() {
+        const line = this.dialogueQueue.shift();
+        if (line === undefined) {
+          this.closeDialogue();
+          return;
+        }
+
+        if (this.typeEvent) this.typeEvent.remove(false);
+        this.isTyping = true;
+        this.dialogueText.setText('');
+        let index = 0;
+        this.typeEvent = this.time.addEvent({
+          delay: 16,
+          loop: true,
+          callback: () => {
+            index += 1;
+            this.dialogueText.setText(line.slice(0, index));
+            if (index >= line.length) {
+              this.isTyping = false;
+              this.typeEvent.remove(false);
+            }
+          }
+        });
+        this.currentFullLine = line;
+      }
+
+      advanceDialogue() {
+        if (this.isTyping) {
+          if (this.typeEvent) this.typeEvent.remove(false);
+          this.isTyping = false;
+          this.dialogueText.setText(this.currentFullLine);
+          return;
+        }
+        this.showNextDialogueLine();
+      }
+
+      closeDialogue() {
+        this.dialogueOpen = false;
+        this.isTyping = false;
+        this.dialogueBg.setVisible(false);
+        this.speakerText.setVisible(false);
+        this.dialogueText.setVisible(false);
+        this.continueText.setVisible(false);
+        this.dialogueText.setText('');
+        const done = this.dialogueOnComplete;
+        this.dialogueOnComplete = null;
+        if (done) done();
+      }
+
+      missionStep() {
+        const headcountTarget = this.npcs.length;
+        if (this.mission.luggage < 3) return 1;
+        if (!this.mission.charger) return 2;
+        if (this.mission.headcount.size < headcountTarget) return 3;
+        if (this.playerId !== 'megan' && !this.mission.meganBriefing) return 4;
+        return 5;
+      }
+
+      updateMission() {
+        const step = this.missionStep();
+        const names = this.npcs.map((npc) => npc.displayName);
+        const missing = names.filter((name) => !this.mission.headcount.has(name));
+        const headcountTarget = this.npcs.length;
+
+        let detail = '';
+        if (step === 1) detail = `1. PACK THE RV  (${this.mission.luggage}/3 luggage)`;
+        if (step === 2) detail = '2. FIND THE SACRED CHARGER';
+        if (step === 3) detail = `3. FAMILY HEADCOUNT  (${this.mission.headcount.size}/${headcountTarget})\n   Missing: ${missing.join(', ')}`;
+        if (step === 4) detail = '4. REPORT TO MEGAN';
+        if (step === 5) detail = '5. BOARD THE RV';
+
+        const petLine = `\nSIDE QUEST: SAY GOODBYE TO THE PETS ${this.petQuest.pet.size}/7${this.petQuest.complete ? ' \u2713' : ''}`;
+        this.objectiveText.setText(`${detail}\n\nSIDE QUEST: EMERGENCY SNACKS ${this.sideQuest.snacks}/3${this.sideQuest.complete ? ' \u2713' : ''}${petLine}`);
+        this.harmonyBar.width = Math.max(0, 206 * (this.familyHarmony / 100));
+        if (this.familyHarmony < 35) this.harmonyBar.setFillStyle(COLORS.red);
+        else if (this.familyHarmony < 65) this.harmonyBar.setFillStyle(COLORS.gold);
+        else this.harmonyBar.setFillStyle(COLORS.teal);
+
+        // Megan's final mission briefing becomes available after headcount
+        // \u2014 unless Megan is the one playing, in which case she just goes.
+        if (step === 4 && !this.mission.meganBriefing) {
+          const megan = this.npcs.find((npc) => npc.charId === 'megan');
+          if (megan) {
+            megan.prompt = 'REPORT TO MEGAN';
+            megan.interact = () => {
+              this.mission.meganBriefing = true;
+              this.say('Megan', [
+                'Luggage: loaded. Charger: recovered. Children: statistically all present.',
+                this.sideQuest.complete
+                  ? `I also found your \u201Cemergency\u201D snack cache. We\u2019ll discuss your definition of emergency after Ohio.`
+                  : 'You showed unusual restraint with snacks. Frankly, I\u2019m concerned.',
+                'Everyone into the RV. We are now only forty-seven minutes behind schedule.'
+              ], () => this.updateMission());
+            };
+          }
+        }
+      }
+
+      tryBoardRV() {
+        const step = this.missionStep();
+        if (step < 5) {
+          const complaints = {
+            1: 'The RV is rejecting entry until its luggage-based tribute is complete.',
+            2: 'Without the charger, this vehicle will become a lawless society before Racine.',
+            3: 'We should probably confirm all children are coming. It\u2019s a surprisingly strict family policy.',
+            4: 'Megan requires a final briefing. She used the phrase \u201Cnon-negotiable,\u201D which felt fairly conclusive.'
+          };
+          // Mike's Counsel and Carry smooths things over with officials \u2014
+          // and, apparently, with Megan's boarding procedure.
+          const penalty = this.playerData.mods.counsel ? -0.5 : -2;
+          this.adjustHarmony(penalty);
+          const speaker = this.playerData.mods.counsel ? 'Mike' : charName(this.playerId);
+          const line = this.playerData.mods.counsel
+            ? `${complaints[step]} I gave it my most persuasive smile and a firm handshake. It has been smiled at and largely ignored.`
+            : complaints[step];
+          this.say(speaker, [line], () => this.updateMission());
+          return;
+        }
+
+        this.mission.boarded = true;
+        this.player.setVelocity(0);
+        this.dialogueOpen = true;
+        this.cameras.main.fadeOut(900, 20, 18, 29);
+        this.time.delayedCall(1000, () => this.scene.start('ChapterComplete', {
+          chapterTitle: 'ESCAPE FROM MILWAUKEE',
+          nextScene: 'Highway',
+          harmony: this.familyHarmony,
+          character: this.playerId,
+          stats: [
+            `Emergency snacks: ${this.sideQuest.snacks}/3`,
+            `Family headcount: ${this.mission.headcount.size}/7`,
+            `Pets said goodbye to: ${this.petQuest.pet.size}/7`
+          ],
+          caption: 'Milwaukee has been escaped. Ohio has not yet been warned.'
+        }));
+      }
+    }
+
+    function ensureTripTextures(scene) {
+      const make = (key, width, height, draw) => {
+        if (scene.textures.exists(key)) return;
+        const g = scene.make.graphics({ x: 0, y: 0, add: false });
+        draw(g);
+        g.generateTexture(key, width, height);
+        g.destroy();
+      };
+
+      const makePerson = (key, shirt, hair, pants = 0x29324b) => {
+        make(key, 24, 32, (g) => {
+          g.fillStyle(0x000000, 0.28).fillEllipse(12, 29, 18, 7);
+          g.fillStyle(pants, 1).fillRect(7, 20, 4, 8).fillRect(13, 20, 4, 8);
+          g.fillStyle(shirt, 1).fillRect(5, 10, 14, 12);
+          g.fillStyle(0xefc19a, 1).fillRect(7, 3, 10, 9);
+          g.fillStyle(hair, 1).fillRect(6, 1, 12, 5).fillRect(5, 4, 3, 5);
+          g.fillStyle(0x201a22, 1).fillRect(9, 7, 2, 2).fillRect(14, 7, 2, 2);
+        });
+      };
+
+      makePerson('jerad', 0x5f86c7, 0x2d211f);
+      makePerson('megan', 0xb35b8c, 0xe8c77e);
+      makePerson('renee', 0x6eb7a7, 0xf1d18b);
+      makePerson('mike', 0x9c6f44, 0x7d623d);
+      makePerson('cora', 0xd46b5f, 0x503126);
+      makePerson('mae', 0x66588f, 0x4a2b22);
+      makePerson('mackenzie', 0xefa94a, 0xe4c070);
+      makePerson('kennedy', 0x4aa0a8, 0xe9c87d);
+
+      make('rv-small', 64, 96, (g) => {
+        g.fillStyle(0x000000, .25).fillEllipse(32, 86, 52, 15);
+        g.fillStyle(COLORS.rv, 1).fillRect(8, 6, 48, 78);
+        g.fillStyle(COLORS.rvBlue, 1).fillRect(13, 13, 38, 18);
+        g.fillStyle(0x2a2732, 1).fillRect(10, 68, 10, 13).fillRect(44, 68, 10, 13);
+        g.fillStyle(0xe76f51, 1).fillRect(12, 79, 8, 4).fillRect(44, 79, 8, 4);
+        g.fillStyle(0xf4c95d, 1).fillRect(13, 6, 8, 4).fillRect(43, 6, 8, 4);
+      });
+
+      make('car', 42, 70, (g) => {
+        g.fillStyle(0x000000, .22).fillEllipse(21, 62, 35, 10);
+        g.fillStyle(0xb84f55, 1).fillRect(5, 9, 32, 52);
+        g.fillStyle(0x9bd0de, 1).fillRect(9, 15, 24, 14).fillRect(9, 39, 24, 12);
+        g.fillStyle(0x27232f, 1).fillRect(2, 18, 6, 14).fillRect(34, 18, 6, 14).fillRect(2, 45, 6, 13).fillRect(34, 45, 6, 13);
+      });
+
+      make('cone', 28, 34, (g) => {
+        g.fillStyle(0x000000, .2).fillEllipse(14, 30, 24, 6);
+        g.fillStyle(0xe76f51, 1).fillTriangle(14, 2, 4, 28, 24, 28);
+        g.fillStyle(0xf7f1dc, 1).fillRect(7, 17, 14, 5);
+      });
+
+      make('pothole', 44, 28, (g) => {
+        g.fillStyle(0x25232b, 1).fillEllipse(22, 14, 42, 24);
+        g.fillStyle(0x111016, 1).fillEllipse(23, 15, 28, 14);
+        g.lineStyle(2, 0x77727f, 1).strokeEllipse(22, 14, 42, 24);
+      });
+
+      const icon = (key, color, symbol) => make(key, 42, 42, (g) => {
+        g.fillStyle(0x000000, .25).fillCircle(21, 23, 19);
+        g.fillStyle(color, 1).fillCircle(21, 19, 18);
+        g.lineStyle(3, 0x17131d, 1).strokeCircle(21, 19, 18);
+        g.fillStyle(0x17131d, 1);
+        if (symbol === 'gas') {
+          g.fillRect(13, 9, 13, 20).fillRect(27, 14, 4, 14);
+          g.fillStyle(0xf7f1dc, 1).fillRect(16, 12, 7, 6);
+        } else if (symbol === 'rest') {
+          g.fillRect(10, 14, 22, 14).fillRect(14, 9, 14, 8);
+          g.fillStyle(0xf7f1dc, 1).fillRect(14, 18, 5, 6).fillRect(23, 18, 5, 6);
+        } else if (symbol === 'sign') {
+          g.fillRect(18, 18, 6, 17).fillRect(8, 7, 26, 17);
+          g.fillStyle(0xf7f1dc, 1).fillRect(11, 11, 20, 3);
+        } else if (symbol === 'camera') {
+          g.fillRect(8, 13, 26, 18).fillRect(14, 9, 10, 5);
+          g.fillStyle(0xf7f1dc, 1).fillCircle(21, 22, 6);
+        } else if (symbol === 'bag') {
+          g.fillRect(9, 12, 24, 20);
+          g.lineStyle(3, 0x17131d, 1).strokeRect(15, 7, 12, 8);
+        } else if (symbol === 'food') {
+          g.fillCircle(21, 21, 12);
+          g.fillStyle(0xf7f1dc, 1).fillCircle(18, 18, 4).fillCircle(25, 23, 3);
+        } else if (symbol === 'power') {
+          g.fillRect(13, 10, 16, 21).fillRect(16, 5, 3, 7).fillRect(23, 5, 3, 7);
+        } else if (symbol === 'water') {
+          g.fillTriangle(21, 5, 9, 28, 33, 28).fillCircle(21, 25, 10);
+        } else if (symbol === 'fire') {
+          g.fillTriangle(21, 4, 9, 31, 32, 31);
+          g.fillStyle(0xf4c95d, 1).fillTriangle(21, 12, 15, 29, 28, 29);
+        } else if (symbol === 'stamp') {
+          g.fillRect(10, 8, 22, 24);
+          g.fillStyle(0xf7f1dc, 1).fillRect(14, 12, 14, 4).fillRect(14, 20, 14, 4);
+        } else if (symbol === 'star') {
+          g.fillTriangle(21, 5, 25, 16, 37, 16);
+          g.fillTriangle(37, 16, 28, 23, 31, 35);
+          g.fillTriangle(31, 35, 21, 28, 11, 35);
+          g.fillTriangle(11, 35, 14, 23, 5, 16);
+          g.fillTriangle(5, 16, 17, 16, 21, 5);
+        }
+      });
+
+      icon('gas-icon', 0xf4c95d, 'gas');
+      icon('rest-icon', 0x78d6c6, 'rest');
+      icon('sign-icon', 0xe76f51, 'sign');
+      icon('camera-icon', 0x9b7ede, 'camera');
+      icon('bag-icon', 0xd48759, 'bag');
+      icon('food-icon', 0x74a65a, 'food');
+      icon('power-icon', 0xf4c95d, 'power');
+      icon('water-icon', 0x5ba4d6, 'water');
+      icon('fire-icon', 0xe76f51, 'fire');
+      icon('stamp-icon', 0x78d6c6, 'stamp');
+      icon('star-icon', 0xf4c95d, 'star');
+
+      make('hat', 34, 28, (g) => {
+        g.fillStyle(0x000000, .2).fillEllipse(17, 24, 28, 5);
+        g.fillStyle(0x9c6f44, 1).fillRect(8, 8, 18, 12).fillRect(3, 18, 28, 5);
+      });
+
+      make('firefly', 24, 24, (g) => {
+        g.fillStyle(0xf4c95d, .28).fillCircle(12, 12, 11);
+        g.fillStyle(0xfff3a3, 1).fillCircle(12, 12, 4);
+        g.fillStyle(0x17131d, 1).fillRect(10, 7, 4, 10);
+      });
+
+      make('marshmallow', 28, 28, (g) => {
+        g.fillStyle(0x000000, .2).fillEllipse(14, 24, 22, 5);
+        g.fillStyle(0xf7f1dc, 1).fillRoundedRect(5, 5, 18, 17, 5);
+        g.fillStyle(0xc99a6b, 1).fillRect(6, 18, 16, 3);
+      });
+
+      make('backpack', 34, 38, (g) => {
+        g.fillStyle(0x000000, .2).fillEllipse(17, 34, 28, 6);
+        g.fillStyle(0x66588f, 1).fillRoundedRect(6, 9, 22, 25, 5);
+        g.fillStyle(0x392f50, 1).fillRect(10, 7, 14, 3).fillRect(8, 9, 3, 7).fillRect(23, 9, 3, 7);
+        g.fillStyle(0xf4c95d, 1).fillRect(10, 20, 14, 5);
+      });
+
+      make('souvenir', 32, 32, (g) => {
+        g.fillStyle(0x000000, .2).fillEllipse(16, 27, 24, 5);
+        g.fillStyle(0x78d6c6, 1).fillRect(7, 8, 18, 18);
+        g.fillStyle(0xf4c95d, 1).fillRect(10, 5, 12, 6);
+        g.fillStyle(0x17131d, 1).fillCircle(16, 17, 4);
+      });
+
+      const animal = (key, body, accent, kind) => make(key, 52, 46, (g) => {
+        g.fillStyle(0x000000, .2).fillEllipse(26, 39, 42, 8);
+        g.fillStyle(body, 1).fillEllipse(25, 24, 34, 20);
+        g.fillCircle(41, 17, 9);
+        g.fillRect(13, 31, 5, 11).fillRect(31, 31, 5, 11);
+        g.fillStyle(accent, 1);
+        if (kind === 'zebra') {
+          for (let x = 13; x < 39; x += 7) g.fillRect(x, 15, 3, 18);
+        } else if (kind === 'giraffe') {
+          g.fillRect(37, 4, 6, 18).fillCircle(40, 5, 7);
+          g.fillCircle(17, 20, 3).fillCircle(28, 27, 3).fillCircle(34, 17, 3);
+        } else if (kind === 'rhino') {
+          g.fillTriangle(47, 12, 52, 16, 45, 18);
+        } else if (kind === 'cheetah') {
+          g.fillCircle(16, 20, 2).fillCircle(25, 16, 2).fillCircle(31, 25, 2).fillCircle(40, 20, 2);
+        } else if (kind === 'bison') {
+          g.fillCircle(12, 20, 8).fillRect(8, 10, 12, 8);
+        }
+        g.fillStyle(0x17131d, 1).fillRect(43, 14, 2, 2);
+      });
+
+      animal('giraffe', 0xd5a24f, 0x8a5c2b, 'giraffe');
+      animal('rhino', 0x8f9294, 0xd8d8d2, 'rhino');
+      animal('zebra', 0xf1eee3, 0x25232b, 'zebra');
+      animal('cheetah', 0xd8a64b, 0x4a3420, 'cheetah');
+      animal('bison', 0x6a4b34, 0x3a291e, 'bison');
+    }
+
+    class AdventureScene extends Phaser.Scene {
+      init(data = {}) {
+        this.familyHarmony = Number.isFinite(data.harmony) ? data.harmony : 72;
+        this.playerId = CHARACTERS[data.character] ? data.character : 'jerad';
+        this.playerData = CHARACTERS[this.playerId];
+        this.dialogueOpen = false;
+        this.currentInteractable = null;
+        this.interactables = [];
+        this.dialogueQueue = [];
+        this.dialogueOnComplete = null;
+        this.chillRegenAccum = 0;
+      }
+
+      setupAdventure(options = {}) {
+        ensureTripTextures(this);
+        this.worldW = options.worldW || WORLD_W;
+        this.worldH = options.worldH || WORLD_H;
+        this.createAdventureUI(options.title || 'ROAD TRIP OBJECTIVE');
+        this.configureAdventureInput();
+      }
+
+      configureAdventureInput() {
+        const keyboard = this.input.keyboard;
+        this.cursors = keyboard ? keyboard.createCursorKeys() : {};
+        this.keys = keyboard ? keyboard.addKeys({
+          up: Phaser.Input.Keyboard.KeyCodes.W,
+          down: Phaser.Input.Keyboard.KeyCodes.S,
+          left: Phaser.Input.Keyboard.KeyCodes.A,
+          right: Phaser.Input.Keyboard.KeyCodes.D,
+          interact: Phaser.Input.Keyboard.KeyCodes.E,
+          interactAlt: Phaser.Input.Keyboard.KeyCodes.SPACE
+        }) : {};
+      }
+
+      actionPressed() {
+        const pressed = Boolean(
+          (this.keys.interact && Phaser.Input.Keyboard.JustDown(this.keys.interact)) ||
+          (this.keys.interactAlt && Phaser.Input.Keyboard.JustDown(this.keys.interactAlt)) ||
+          touchState.interactPressed
+        );
+        touchState.interactPressed = false;
+        return pressed;
+      }
+
+      movementVector(speed = 180) {
+        this.applyChillRegen();
+        const left = Boolean(this.cursors.left?.isDown || this.keys.left?.isDown || touchState.left);
+        const right = Boolean(this.cursors.right?.isDown || this.keys.right?.isDown || touchState.right);
+        const up = Boolean(this.cursors.up?.isDown || this.keys.up?.isDown || touchState.up);
+        const down = Boolean(this.cursors.down?.isDown || this.keys.down?.isDown || touchState.down);
+        const vector = new Phaser.Math.Vector2(
+          (right ? 1 : 0) - (left ? 1 : 0),
+          (down ? 1 : 0) - (up ? 1 : 0)
+        );
+        if (vector.lengthSq() > 0) vector.normalize().scale(speed);
+        return vector;
+      }
+
+      createAdventureUI(title) {
+        this.hud = this.add.container(0, 0).setScrollFactor(0).setDepth(300);
+        const objectiveBg = this.add.rectangle(16, 16, 350, 138, COLORS.panel, .94)
+          .setOrigin(0).setStrokeStyle(3, 0x08070c);
+        const harmonyBg = this.add.rectangle(GAME_W - 260, 16, 244, 56, COLORS.panel, .94)
+          .setOrigin(0).setStrokeStyle(3, 0x08070c);
+        this.objectiveTitle = pixelText(this, 30, 27, title, 14, '#f4c95d').setScrollFactor(0).setDepth(301);
+        this.objectiveText = pixelText(this, 30, 52, '', 12, '#f7f1dc')
+          .setScrollFactor(0).setDepth(301).setLineSpacing(4).setWordWrapWidth(320);
+        this.harmonyLabel = pixelText(this, GAME_W - 245, 27, 'FAMILY HARMONY', 13, '#78d6c6').setScrollFactor(0).setDepth(301);
+        this.harmonyBarBg = this.add.rectangle(GAME_W - 244, 49, 210, 11, 0x08070c, 1).setOrigin(0).setScrollFactor(0).setDepth(301);
+        this.harmonyBar = this.add.rectangle(GAME_W - 242, 51, 206, 7, COLORS.teal, 1).setOrigin(0).setScrollFactor(0).setDepth(302);
+        this.hud.add([objectiveBg, harmonyBg, this.objectiveTitle, this.objectiveText, this.harmonyLabel, this.harmonyBarBg, this.harmonyBar]);
+
+        this.promptBg = this.add.rectangle(GAME_W / 2, GAME_H - 82, 470, 42, COLORS.dark, .92)
+          .setScrollFactor(0).setDepth(309).setVisible(false).setStrokeStyle(3, 0xf4c95d);
+        this.promptText = pixelText(this, GAME_W / 2, GAME_H - 82, '', 14, '#ffffff')
+          .setOrigin(.5).setScrollFactor(0).setDepth(310).setVisible(false);
+
+        this.dialogueBg = this.add.rectangle(30, GAME_H - 160, GAME_W - 60, 130, COLORS.panel, .98)
+          .setOrigin(0).setScrollFactor(0).setDepth(320).setVisible(false).setStrokeStyle(4, 0x08070c);
+        this.speakerText = pixelText(this, 52, GAME_H - 145, '', 17, '#f4c95d')
+          .setScrollFactor(0).setDepth(321).setVisible(false);
+        this.dialogueText = pixelText(this, 52, GAME_H - 114, '', 16, '#f7f1dc')
+          .setScrollFactor(0).setDepth(321).setVisible(false).setWordWrapWidth(GAME_W - 105);
+        this.continueText = pixelText(this, GAME_W - 66, GAME_H - 48, '▼', 16, '#78d6c6')
+          .setOrigin(1).setScrollFactor(0).setDepth(321).setVisible(false);
+        this.refreshHarmony();
+      }
+
+      refreshHarmony() {
+        this.familyHarmony = Phaser.Math.Clamp(this.familyHarmony, 0, 100);
+        this.harmonyBar.width = Math.max(0, 206 * (this.familyHarmony / 100));
+        if (this.familyHarmony < 35) this.harmonyBar.setFillStyle(COLORS.red);
+        else if (this.familyHarmony < 65) this.harmonyBar.setFillStyle(COLORS.gold);
+        else this.harmonyBar.setFillStyle(COLORS.teal);
+      }
+
+      adjustHarmony(amount) {
+        const mods = this.playerData.mods;
+        const scaled = amount >= 0 ? amount * mods.harmonyGainMult : amount * mods.harmonyLossMult;
+        this.familyHarmony = Phaser.Math.Clamp(this.familyHarmony + scaled, 0, 100);
+        this.refreshHarmony();
+      }
+
+      // Renee's Chill Aura: a slow passive harmony trickle while she's
+      // along for the trip. Safe to call every frame.
+      applyChillRegen() {
+        if (!this.playerData.mods.chillRegen) return;
+        const now = this.time.now;
+        if (!this.lastChillTick) { this.lastChillTick = now; return; }
+        if (now - this.lastChillTick >= 4000) {
+          this.lastChillTick = now;
+          this.adjustHarmony(1);
+        }
+      }
+
+      setObjective(text) {
+        this.objectiveText.setText(text);
+        this.refreshHarmony();
+      }
+
+      createDrivingGuide({ finishLabel = 'FINISH ZONE', collectibleLabel = 'GOLD ITEMS', finishColor = '#77e08d' } = {}) {
+        this.driveFinishLabel = finishLabel;
+        this.driveCollectibleLabel = collectibleLabel;
+        this.driveFinishColor = finishColor;
+
+        const guideBg = this.add.rectangle(GAME_W - 16, 82, 350, 106, COLORS.panel, .94)
+          .setOrigin(1, 0).setScrollFactor(0).setDepth(303).setStrokeStyle(3, 0x08070c);
+        this.driveGuideTitle = pixelText(this, GAME_W - 348, 94, 'DRIVING RULES', 13, '#f4c95d')
+          .setScrollFactor(0).setDepth(304);
+        this.driveGuideText = pixelText(this, GAME_W - 348, 117,
+          `GOAL: ${finishLabel}
+${collectibleLabel}: OPTIONAL BONUS
+CARS · CONES · POTHOLES: DODGE`, 11, '#f7f1dc')
+          .setScrollFactor(0).setDepth(304).setLineSpacing(3);
+
+        this.driveProgressBg = this.add.rectangle(405, 20, 260, 16, 0x08070c, .94)
+          .setOrigin(0).setScrollFactor(0).setDepth(304).setStrokeStyle(2, 0x08070c);
+        this.driveProgressBar = this.add.rectangle(408, 23, 254, 10, 0x77e08d, 1)
+          .setOrigin(0).setScrollFactor(0).setDepth(305);
+        this.driveProgressBar.width = 2;
+        this.driveProgressLabel = pixelText(this, 535, 42, `↑ ${finishLabel} AT 100%`, 12, finishColor)
+          .setOrigin(.5, 0).setScrollFactor(0).setDepth(305);
+
+        this.driveAheadBg = this.add.rectangle(GAME_W / 2, 84, 350, 44, 0x1f5635, .96)
+          .setScrollFactor(0).setDepth(306).setStrokeStyle(3, 0x77e08d).setVisible(false);
+        this.driveAheadText = pixelText(this, GAME_W / 2, 84, '', 16, finishColor)
+          .setOrigin(.5).setScrollFactor(0).setDepth(307).setVisible(false);
+
+        this.hud.add([
+          guideBg, this.driveGuideTitle, this.driveGuideText,
+          this.driveProgressBg, this.driveProgressBar, this.driveProgressLabel,
+          this.driveAheadBg, this.driveAheadText
+        ]);
+      }
+
+      updateDrivingGuide(progress) {
+        if (!this.driveProgressBar) return;
+        const clamped = Phaser.Math.Clamp(progress, 0, 1);
+        this.driveProgressBar.width = Math.max(2, 254 * clamped);
+        const percent = Math.floor(clamped * 100);
+        this.driveProgressLabel.setText(`↑ ${this.driveFinishLabel} AT 100% · ${percent}%`);
+        const showAhead = clamped >= .72 && clamped < 1;
+        this.driveAheadBg.setVisible(showAhead);
+        this.driveAheadText.setVisible(showAhead);
+        if (showAhead) {
+          const remaining = Math.max(1, 100 - percent);
+          this.driveAheadText.setText(`${this.driveFinishLabel} AHEAD · ${remaining}% TO GO ↑`);
+        }
+      }
+
+      addWall(x, y, w, h) {
+        if (!this.walls) this.walls = this.physics.add.staticGroup();
+        const wall = this.add.rectangle(x, y, w, h, 0x000000, 0);
+        this.physics.add.existing(wall, true);
+        this.walls.add(wall);
+        return wall;
+      }
+
+      addInteractable(x, y, texture, prompt, onInteract, options = {}) {
+        const item = texture
+          ? this.physics.add.staticSprite(x, y, texture).setDepth(options.depth || 20)
+          : this.add.zone(x, y, options.width || 80, options.height || 80);
+        if (!texture) this.physics.add.existing(item, true);
+        if (options.scale) item.setScale(options.scale);
+        item.prompt = prompt;
+        item.interact = () => {
+          if (!item.active || this.dialogueOpen) return;
+          onInteract(item);
+        };
+        this.interactables.push(item);
+        if (options.bob && texture) {
+          this.tweens.add({ targets: item, y: y - 5, duration: 650, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        }
+        return item;
+      }
+
+      findNearestInteractable(distanceLimit = 82) {
+        let nearest = null;
+        let nearestDistance = distanceLimit + (this.playerData?.mods?.interactBonus || 0);
+        this.interactables.forEach((obj) => {
+          if (!obj.active || !obj.visible) return;
+          const distance = Phaser.Math.Distance.Between(this.player.x, this.player.y, obj.x, obj.y);
+          if (distance < nearestDistance) {
+            nearestDistance = distance;
+            nearest = obj;
+          }
+        });
+        this.currentInteractable = nearest;
+        const visible = Boolean(nearest) && !this.dialogueOpen;
+        this.promptBg.setVisible(visible);
+        this.promptText.setVisible(visible);
+        if (nearest) this.promptText.setText(`[ A / E ] ${nearest.prompt}`);
+      }
+
+      say(speaker, lines, onComplete = null) {
+        this.dialogueOpen = true;
+        this.dialogueQueue = [...lines];
+        this.dialogueOnComplete = onComplete;
+        this.speakerText.setText(String(speaker).toUpperCase());
+        this.dialogueBg.setVisible(true);
+        this.speakerText.setVisible(true);
+        this.dialogueText.setVisible(true);
+        this.continueText.setVisible(true);
+        this.promptBg.setVisible(false);
+        this.promptText.setVisible(false);
+        this.showNextDialogueLine();
+      }
+
+      showNextDialogueLine() {
+        const line = this.dialogueQueue.shift();
+        if (line === undefined) {
+          this.closeDialogue();
+          return;
+        }
+        if (this.typeEvent) this.typeEvent.remove(false);
+        this.isTyping = true;
+        this.dialogueText.setText('');
+        let index = 0;
+        this.currentFullLine = line;
+        this.typeEvent = this.time.addEvent({
+          delay: 14,
+          loop: true,
+          callback: () => {
+            index += 1;
+            this.dialogueText.setText(line.slice(0, index));
+            if (index >= line.length) {
+              this.isTyping = false;
+              this.typeEvent.remove(false);
+            }
+          }
+        });
+      }
+
+      advanceDialogue() {
+        if (this.isTyping) {
+          if (this.typeEvent) this.typeEvent.remove(false);
+          this.isTyping = false;
+          this.dialogueText.setText(this.currentFullLine);
+          return;
+        }
+        this.showNextDialogueLine();
+      }
+
+      closeDialogue() {
+        this.dialogueOpen = false;
+        this.isTyping = false;
+        this.dialogueBg.setVisible(false);
+        this.speakerText.setVisible(false);
+        this.dialogueText.setVisible(false);
+        this.continueText.setVisible(false);
+        this.dialogueText.setText('');
+        const done = this.dialogueOnComplete;
+        this.dialogueOnComplete = null;
+        if (done) done();
+      }
+
+      updateWalkingPlayer(actionPressed, speed = 180) {
+        if (this.dialogueOpen) {
+          this.player.setVelocity(0);
+          if (actionPressed) this.advanceDialogue();
+          return false;
+        }
+        const velocity = this.movementVector(speed);
+        if (velocity.lengthSq() > 0) {
+          this.player.setVelocity(velocity.x, velocity.y);
+          this.player.setFlipX(velocity.x < 0);
+          this.player.rotation = Math.sin(this.time.now / 75) * .035;
+        } else {
+          this.player.setVelocity(0);
+          this.player.rotation = 0;
+        }
+        this.findNearestInteractable();
+        if (actionPressed && this.currentInteractable) this.currentInteractable.interact();
+        return true;
+      }
+
+      finishChapter(chapterTitle, nextScene, stats = [], caption = '') {
+        this.player?.setVelocity?.(0);
+        this.dialogueOpen = true;
+        this.cameras.main.fadeOut(700, 20, 18, 29);
+        this.time.delayedCall(760, () => this.scene.start('ChapterComplete', {
+          chapterTitle,
+          nextScene,
+          harmony: this.familyHarmony,
+          character: this.playerId,
+          stats,
+          caption
+        }));
+      }
+    }
+
+    class HighwayScene extends AdventureScene {
+      constructor() { super('Highway'); }
+
+      create() {
+        this.setupAdventure({ title: 'CHAPTER 2 · INTERSTATE DIPLOMACY', worldW: 960, worldH: 3900 });
+        this.startY = 3700;
+        this.finishY = 230;
+        this.routeIndex = 0;
+        this.oddities = 0;
+        this.hitCooldown = 0;
+        this.speedPenaltyUntil = 0;
+        this.ending = false;
+        this.autoSpeed = 205 * this.playerData.mods.driveSpeedMult;
+        const snackBuyer = this.playerId === 'jerad' ? 'Jerad' : 'Someone';
+        this.routeEvents = [
+          { y: 3260, texture: 'gas-icon', speaker: 'Renee', lines: ['Fuel stop passed automatically.', 'Mike calculated the mileage three different ways and somehow made the tank feel judged.'], label: 'FUEL STOP' },
+          { y: 2420, texture: 'rest-icon', speaker: this.playerId === 'mackenzie' ? 'Kennedy' : 'Mackenzie', lines: [`Rest stop passed. ${snackBuyer} bought a snack called \u201CExtreme Meat.\u201D`, 'I asked what made it extreme. The answer was \u201Cthe consequences.\u201D'], label: 'REST STOP' },
+          { y: 1550, texture: 'sign-icon', speaker: this.playerId === 'cora' ? 'Mae' : 'Cora', lines: ['Ohio state line!', 'Mike has prepared brief remarks. The family has voted to keep driving.'], label: 'OHIO STATE LINE' },
+          { y: 720, texture: 'star-icon', speaker: this.playerId === 'mae' ? 'Cora' : 'Mae', lines: ['The green merge zone is ahead.', 'Mike offered to narrate the merge. His microphone privileges remain suspended.'], label: 'GREEN MERGE ZONE' }
+        ];
+        this.drawHighway();
+        this.createDriver();
+        this.createHighwayObjects();
+        this.createDrivingGuide({
+          finishLabel: 'GREEN MERGE ZONE',
+          collectibleLabel: 'GOLD SOUVENIRS',
+          finishColor: '#77e08d'
+        });
+        this.updateObjective();
+        const narrator = this.playerId === 'mackenzie' ? 'Kennedy' : 'Mackenzie';
+        const skill = this.playerData.mods.driveSkill;
+        const experienceLine = skill < 1
+          ? 'Also, you don\u2019t technically have a license for this. Nobody\u2019s mentioned it. Let\u2019s keep it that way.'
+          : skill > 1
+            ? 'You\u2019ve actually got a license for this one, so, you know. No pressure. Some pressure.'
+            : 'You do have a license. Whether that\u2019s reassuring is between you and the road.';
+        this.time.delayedCall(350, () => this.say(narrator, [
+          `${charName(this.playerId)}, the RV drives forward by itself. Your entire job is steering left and right without collecting the potholes.`,
+          'Gold souvenir icons are optional bonuses. Cars, cones, and potholes lower Family Harmony.',
+          'Keep driving until the progress bar reaches 100%. Cross the big green MERGE ZONE and the RV joins the highway automatically.',
+          experienceLine
+        ]));
+      }
+
+      drawHighway() {
+        const g = this.add.graphics();
+        g.fillStyle(0x4f7e43, 1).fillRect(0, 0, 960, 3900);
+        g.fillStyle(0x55535e, 1).fillRect(180, 0, 600, 3900);
+        g.fillStyle(0x77747d, 1).fillRect(160, 0, 20, 3900).fillRect(780, 0, 20, 3900);
+        g.fillStyle(0xf7f1dc, 1);
+        for (let y = 0; y < 3900; y += 95) {
+          g.fillRect(375, y, 10, 55);
+          g.fillRect(575, y, 10, 55);
+        }
+        g.fillStyle(0xf4c95d, 1).fillRect(190, 0, 7, 3900).fillRect(763, 0, 7, 3900);
+        for (let y = 150; y < 3900; y += 420) {
+          g.fillStyle(0x355e3b, 1).fillCircle(95, y, 46).fillCircle(865, y + 120, 42);
+          g.fillStyle(0x735039, 1).fillRect(87, y + 25, 16, 45).fillRect(857, y + 145, 16, 42);
+        }
+
+        // Large, unmistakable automatic merge zone.
+        g.fillStyle(0x347b4b, .96).fillRect(180, 155, 600, 175);
+        g.fillStyle(0x77e08d, 1).fillRect(180, 305, 600, 18);
+        g.fillStyle(0xf7f1dc, 1);
+        for (let x = 235; x <= 675; x += 110) {
+          g.fillTriangle(x, 285, x + 38, 235, x + 76, 285);
+          g.fillRect(x + 34, 278, 8, 34);
+        }
+        pixelText(this, 480, 185, 'GREEN AUTO-MERGE ZONE', 25, '#77e08d').setOrigin(.5).setDepth(3);
+        pixelText(this, 480, 220, 'CROSS THIS AREA · NO COLLECTION QUOTA', 13, '#f7f1dc').setOrigin(.5).setDepth(3);
+
+        this.addWall(145, 1950, 25, 3900);
+        this.addWall(815, 1950, 25, 3900);
+      }
+
+      createDriver() {
+        this.player = this.physics.add.sprite(480, this.startY, 'rv-small').setDepth(40).setCollideWorldBounds(true);
+        this.player.body.setSize(44, 72).setOffset(10, 12);
+        this.physics.add.collider(this.player, this.walls);
+        this.cameras.main.setBounds(0, 0, 960, 3900);
+        this.cameras.main.startFollow(this.player, true, .08, .08);
+        this.cameras.main.setRoundPixels(true);
+        this.physics.world.setBounds(0, 0, 960, 3900);
+      }
+
+      createHighwayObjects() {
+        this.routeEvents.forEach((event) => {
+          this.add.image(480, event.y, event.texture).setDepth(18).setAlpha(.6).setScale(1.1);
+          pixelText(this, 520, event.y - 8, event.label, 12, '#f7f1dc').setDepth(18).setAlpha(.72);
+        });
+
+        this.pickups = this.physics.add.group({ allowGravity: false, immovable: true });
+        const pickupData = [
+          { x: 275, y: 3040, line: 'A souvenir spoon. Finally, a utensil too small to use and too important to discard.' },
+          { x: 690, y: 1740, line: 'A snow globe from a place experiencing no snow. Bold merchandising.' },
+          { x: 290, y: 860, line: 'A magnet shaped like Ohio. Geography has become merchandise.' }
+        ];
+        pickupData.forEach((data, index) => {
+          const glow = this.add.circle(data.x, data.y, 30, 0xf4c95d, .18).setDepth(23);
+          const label = pixelText(this, data.x, data.y - 36, 'OPTIONAL +HARMONY', 10, '#f4c95d').setOrigin(.5).setDepth(24);
+          const item = this.physics.add.sprite(data.x, data.y, 'souvenir').setDepth(25).setImmovable(true).setTint(0xffdf72);
+          item.body.setAllowGravity(false);
+          item.setData('index', index);
+          item.setData('line', data.line);
+          item.setData('glow', glow);
+          item.setData('label', label);
+          this.pickups.add(item);
+          this.tweens.add({ targets: [item, glow], scale: 1.13, duration: 520, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        });
+        this.physics.add.overlap(this.player, this.pickups, this.collectRoadsidePickup, null, this);
+
+        const obstacles = [
+          [350, 3450, 'cone'], [610, 3200, 'car'], [450, 2900, 'pothole'],
+          [310, 2550, 'car'], [620, 2240, 'cone'], [470, 1930, 'pothole'],
+          [640, 1450, 'car'], [350, 1110, 'cone'], [530, 600, 'pothole']
+        ];
+        this.obstacles = this.physics.add.staticGroup();
+        obstacles.forEach(([x, y, key]) => {
+          const obstacle = this.physics.add.staticSprite(x, y, key).setDepth(25);
+          this.obstacles.add(obstacle);
+        });
+        this.physics.add.overlap(this.player, this.obstacles, this.hitRoadObstacle, null, this);
+      }
+
+      collectRoadsidePickup(player, item) {
+        if (!item.active) return;
+        const line = item.getData('line');
+        item.getData('glow')?.destroy();
+        item.getData('label')?.destroy();
+        item.disableBody(true, true);
+        this.oddities += 1;
+        this.adjustHarmony(2);
+        this.updateObjective();
+        this.say(this.playerId === 'mackenzie' ? 'Kennedy' : 'Mackenzie', [`${charName(this.playerId)} actually hit the gold thing instead of the pothole. Mark the calendar.`, line]);
+      }
+
+      hitRoadObstacle(player, obstacle) {
+        const now = this.time.now;
+        if (now < this.hitCooldown || this.ending) return;
+        const mods = this.playerData.mods;
+        this.hitCooldown = now + 750 + mods.obstacleForgiveMs;
+        // Mackenzie's Never Back Down: a failure becomes a speed boost
+        // instead of a slowdown.
+        if (mods.neverBackDown) {
+          this.speedPenaltyUntil = 0;
+          this.autoSpeedBoostUntil = now + 900;
+          this.adjustHarmony(-2);
+        } else {
+          this.speedPenaltyUntil = now + 650;
+          this.adjustHarmony(-4);
+        }
+        this.cameras.main.shake(120, .006);
+        this.player.setTint(0xe76f51);
+        this.time.delayedCall(170, () => this.player?.clearTint());
+        const push = this.player.x <= obstacle.x ? -38 : 38;
+        this.player.x = Phaser.Math.Clamp(this.player.x + push, 205, 755);
+      }
+
+      triggerRouteEvent() {
+        if (this.routeIndex >= this.routeEvents.length || this.dialogueOpen || this.ending) return;
+        const event = this.routeEvents[this.routeIndex];
+        if (this.player.y > event.y) return;
+        this.routeIndex += 1;
+        this.adjustHarmony(1);
+        this.updateObjective();
+        this.say(event.speaker, event.lines);
+      }
+
+      beginAutomaticMerge() {
+        if (this.ending) return;
+        this.ending = true;
+        this.player.setVelocity(0);
+        this.player.body.enable = false;
+        this.promptBg.setVisible(false);
+        this.promptText.setVisible(false);
+        this.setObjective('FINISH REACHED: GREEN MERGE ZONE\n\nMerging automatically · collectibles were optional.');
+        const mergeText = pixelText(this, GAME_W / 2, 220, 'MERGING…', 30, '#f4c95d')
+          .setOrigin(.5).setScrollFactor(0).setDepth(340);
+        this.tweens.add({ targets: mergeText, alpha: .35, duration: 300, yoyo: true, repeat: 2 });
+        this.tweens.add({
+          targets: this.player,
+          x: 480,
+          y: 92,
+          angle: 0,
+          duration: 1050,
+          ease: 'Sine.easeInOut',
+          onComplete: () => this.finishChapter('INTERSTATE DIPLOMACY', 'Wilds', [
+            `Roadside pickups: ${this.oddities}/3`,
+            `Route milestones passed: ${this.routeIndex}/${this.routeEvents.length}`
+          ], 'The RV merged automatically. No traffic laws were emotionally prepared for this.')
+        });
+      }
+
+      updateObjective() {
+        if (!this.player) return;
+        const progress = Phaser.Math.Clamp((this.startY - this.player.y) / (this.startY - this.finishY), 0, 1);
+        const percent = Math.floor(progress * 100);
+        const next = this.routeEvents[this.routeIndex]?.label || 'GREEN MERGE ZONE';
+        const text = `GOAL: REACH GREEN MERGE ZONE  ${percent}%\nNEXT LANDMARK: ${next}\n\nGOLD SOUVENIRS: ${this.oddities}/3 OPTIONAL`;
+        if (text !== this.lastObjectiveText) {
+          this.lastObjectiveText = text;
+          this.setObjective(text);
+          this.updateDrivingGuide(progress);
+        }
+      }
+
+      update(time) {
+        const pressed = this.actionPressed();
+        if (this.dialogueOpen) {
+          this.player.setVelocity(0);
+          if (pressed) this.advanceDialogue();
+          return;
+        }
+        if (this.ending) return;
+        this.applyChillRegen();
+
+        const left = Boolean(this.cursors.left?.isDown || this.keys.left?.isDown || touchState.left);
+        const right = Boolean(this.cursors.right?.isDown || this.keys.right?.isDown || touchState.right);
+        const horizontal = (right ? 1 : 0) - (left ? 1 : 0);
+        const boosted = this.autoSpeedBoostUntil && time < this.autoSpeedBoostUntil;
+        const forwardSpeed = boosted ? this.autoSpeed * 1.35
+          : time < this.speedPenaltyUntil ? this.autoSpeed * .52
+          : this.autoSpeed;
+        this.player.setVelocity(horizontal * 245 * this.playerData.mods.driveSkill, -forwardSpeed);
+        this.player.setAngle(horizontal * 4);
+
+        this.triggerRouteEvent();
+        this.updateObjective();
+        if (this.player.y <= this.finishY) this.beginAutomaticMerge();
+      }
+    }
+
+    class WildsScene extends AdventureScene {
+      constructor() { super('Wilds'); }
+
+      create() {
+        this.setupAdventure({ title: 'CHAPTER 3 · THE WILDS', worldW: 1600, worldH: 1050 });
+        this.state = { checkedIn: false, camera: false, photos: new Set(), hat: false, ranger: false, markers: 0 };
+        this.drawReserve();
+        this.createPlayerAndCamera(410, 850);
+        this.createReserveObjectives();
+        this.updateObjective();
+        this.time.delayedCall(300, () => this.say('Kennedy', [
+          'There are animals, trails, and several signs telling us not to wander off.',
+          'I assume the signs are suggestions for other families.'
+        ]));
+      }
+
+      drawReserve() {
+        const g = this.add.graphics();
+        g.fillStyle(0x6f9d56, 1).fillRect(0, 0, 1600, 1050);
+        g.fillStyle(0xb89b68, 1);
+        g.fillRoundedRect(120, 700, 1360, 120, 55);
+        g.fillRoundedRect(680, 110, 170, 720, 70);
+        g.fillStyle(0x5f91aa, 1).fillEllipse(1160, 270, 320, 210).fillEllipse(390, 270, 260, 170);
+        g.fillStyle(0x355e3b, 1);
+        for (let i = 0; i < 28; i++) {
+          const x = 55 + (i * 137) % 1500;
+          const y = 70 + (i * 89) % 850;
+          g.fillCircle(x, y, 30);
+        }
+        g.fillStyle(0x735039, 1);
+        for (let i = 0; i < 28; i++) {
+          const x = 55 + (i * 137) % 1500;
+          const y = 70 + (i * 89) % 850;
+          g.fillRect(x - 6, y + 20, 12, 32);
+        }
+        g.fillStyle(0xddd4c5, 1).fillRect(80, 710, 250, 160);
+        g.fillStyle(0x553d48, 1).fillRect(60, 680, 290, 45);
+        pixelText(this, 105, 745, 'RANGER\nCHECK-IN', 18, '#385b7a').setDepth(3);
+        this.addWall(205, 790, 250, 160);
+        this.addWall(1160, 270, 300, 190);
+        this.addWall(390, 270, 240, 150);
+        this.addWall(800, -10, 1600, 20);
+        this.addWall(800, 1060, 1600, 20);
+        this.addWall(-10, 525, 20, 1050);
+        this.addWall(1610, 525, 20, 1050);
+      }
+
+      createPlayerAndCamera(x, y) {
+        this.player = this.physics.add.sprite(x, y, this.playerId).setDepth(40).setCollideWorldBounds(true);
+        this.player.body.setSize(15, 17).setOffset(5, 13);
+        this.physics.add.collider(this.player, this.walls);
+        this.cameras.main.setBounds(0, 0, 1600, 1050);
+        this.cameras.main.startFollow(this.player, true, .1, .1);
+        this.cameras.main.setRoundPixels(true);
+        this.physics.world.setBounds(0, 0, 1600, 1050);
+      }
+
+      createReserveObjectives() {
+        this.addInteractable(365, 770, 'sign-icon', 'CHECK IN WITH THE RANGER', (item) => {
+          if (this.state.checkedIn) return this.say('Ranger', ['You are still checked in. We have not legally misplaced you yet.']);
+          this.state.checkedIn = true;
+          item.prompt = 'ASK THE RANGER A QUESTION';
+          this.say('Ranger', [`Welcome to The Wilds. Stay on marked paths, respect the animals, and do not imitate ${charName(this.playerId)}\u2019s giraffe noise.`, 'Mike has already asked whether the rhinos recognize municipal boundaries. They do not.'], () => this.updateObjective());
+        });
+
+        this.addInteractable(470, 760, 'camera-icon', 'PICK UP THE SAFARI CAMERA', (item) => {
+          if (!this.state.checkedIn) return this.say('Megan', ['Check in first. We are not freelancing a safari.']);
+          if (this.state.camera) return;
+          this.state.camera = true;
+          item.disableBody(true, true);
+          this.say('Cora', ['Camera acquired. I am appointing myself director of photography.'], () => this.updateObjective());
+        }, { bob: true });
+
+        const animals = [
+          ['giraffe', 950, 170, 'Giraffe'],
+          ['rhino', 1280, 475, 'Rhino'],
+          ['zebra', 1040, 650, 'Zebra'],
+          ['cheetah', 520, 470, 'Cheetah'],
+          ['bison', 520, 130, 'Bison']
+        ];
+        animals.forEach(([texture, x, y, name]) => this.addInteractable(x, y, texture, `PHOTOGRAPH THE ${String(name).toUpperCase()}`, (item) => {
+          if (!this.state.camera) return this.say('Megan', ['A camera would improve this photography plan considerably.']);
+          if (this.state.photos.has(name)) return this.say('Mae', [`We already have seventeen pictures of the ${name.toLowerCase()}. It has not changed careers.`]);
+          this.state.photos.add(name);
+          this.cameras.main.flash(160, 255, 255, 235);
+          this.adjustHarmony(2);
+          const lines = {
+            Giraffe: 'The giraffe has agreed to one photograph and no creative notes.',
+            Rhino: 'The rhino looks unconcerned by our itinerary. I respect that.',
+            Zebra: 'We photographed the zebra. The camera briefly became a barcode scanner.',
+            Cheetah: `The cheetah moved. ${charName(this.playerId)} photographed a very fast patch of grass.`,
+            Bison: 'The bison has the expression everyone gets when Mike says, “Quick, everybody, I think that’s a swing voter.”'
+          };
+          this.say('Mae', [lines[name]], () => this.updateObjective());
+        }));
+
+        this.addInteractable(1350, 760, 'hat', 'RECOVER MIKE’S ESCAPED HAT', (item) => {
+          if (this.state.photos.size < 5) return this.say('Mike', ['The hat can wait. It has survived campaigns. It can survive grass.']);
+          if (this.state.hat) return;
+          this.state.hat = true;
+          item.disableBody(true, true);
+          this.say(charName(this.playerId), ['Mike\u2019s hat has been recovered without a single speech about it.', 'He is handling the disappointment with admirable courage, and one small salute.'], () => this.updateObjective());
+        }, { bob: true });
+
+        this.addInteractable(390, 850, null, 'REPORT BACK TO THE RANGER', () => {
+          if (!this.state.hat) return this.say('Ranger', ['Return when you have the photos and Mike\u2019s wandering hat.']);
+          if (this.state.ranger) return;
+          this.state.ranger = true;
+          this.say('Ranger', ['Excellent work. You observed wildlife, followed instructions, and recovered a hat nobody asked nature to keep.', 'Mike also gave the zebras a short victory speech. They declined to applaud.'], () => {
+            this.finishChapter('THE GREAT SAFARI CHECKLIST', 'Glamping', [
+              `Animals photographed: ${this.state.photos.size}/5`,
+              `Trail markers found: ${this.state.markers}/3`
+            ], 'The animals remain safe. The family has acquired several hundred nearly identical photographs.');
+          });
+        }, { width: 120, height: 90 });
+
+        [[210, 240], [780, 420], [1450, 220]].forEach(([x, y], index) => this.addInteractable(x, y, 'star-icon', `FIND TRAIL MARKER ${index + 1}`, (item) => {
+          item.disableBody(true, true);
+          this.state.markers += 1;
+          this.adjustHarmony(1);
+          this.say('Kennedy', [`Trail marker ${this.state.markers} found. The adults may now continue pretending they know where we are.`], () => this.updateObjective());
+        }, { bob: true, scale: .75 }));
+      }
+
+      updateObjective() {
+        let line;
+        if (!this.state.checkedIn) line = '1. CHECK IN WITH THE RANGER';
+        else if (!this.state.camera) line = '2. PICK UP THE SAFARI CAMERA';
+        else if (this.state.photos.size < 5) line = `3. PHOTOGRAPH THE ANIMALS (${this.state.photos.size}/5)`;
+        else if (!this.state.hat) line = '4. RECOVER MIKE’S HAT';
+        else line = '5. REPORT BACK TO THE RANGER';
+        this.setObjective(`${line}\n\nSIDE QUEST: TRAIL MARKERS ${this.state.markers}/3`);
+      }
+
+      update() {
+        const pressed = this.actionPressed();
+        this.updateWalkingPlayer(pressed, 185);
+      }
+    }
+
+    class GlampingScene extends AdventureScene {
+      constructor() { super('Glamping'); }
+
+      create() {
+        this.setupAdventure({ title: 'CHAPTER 4 · GLAMPING', worldW: 1500, worldH: 1000 });
+        this.state = { bags: 0, beds: false, dinner: false, stars: false, noise: false, fireflies: 0 };
+        this.drawGlamping();
+        this.createPlayerAndCamera();
+        this.createGlampingObjectives();
+        this.updateObjective();
+        this.time.delayedCall(350, () => this.say('Renee', [
+          'This is camping with beds, electricity, and reasonable expectations.',
+          'So naturally we will still find a way to argue about blankets.'
+        ]));
+      }
+
+      drawGlamping() {
+        const g = this.add.graphics();
+        g.fillStyle(0x355845, 1).fillRect(0, 0, 1500, 1000);
+        g.fillStyle(0x8c714f, 1).fillRoundedRect(80, 700, 1340, 100, 45);
+        g.fillStyle(0xb28b61, 1).fillCircle(360, 360, 180).fillCircle(1120, 360, 180);
+        g.fillStyle(0xe7dfc8, 1).fillTriangle(200, 520, 360, 180, 520, 520);
+        g.fillStyle(0x6f5a4e, 1).fillRect(200, 500, 320, 24);
+        g.fillStyle(0xe7dfc8, 1).fillTriangle(960, 520, 1120, 180, 1280, 520);
+        g.fillStyle(0x6f5a4e, 1).fillRect(960, 500, 320, 24);
+        g.fillStyle(0x5f91aa, 1).fillEllipse(760, 130, 340, 150);
+        g.fillStyle(0x6d4d34, 1).fillRect(655, 590, 210, 30).fillRect(690, 545, 140, 30);
+        g.fillStyle(0x30261f, 1).fillCircle(760, 700, 55);
+        g.fillStyle(0xe76f51, 1).fillTriangle(760, 635, 715, 715, 805, 715);
+        g.fillStyle(0xf4c95d, 1).fillTriangle(760, 655, 735, 710, 785, 710);
+        this.addWall(360, 410, 300, 220);
+        this.addWall(1120, 410, 300, 220);
+        this.addWall(760, 130, 330, 140);
+        this.addWall(750, -10, 1500, 20);
+        this.addWall(750, 1010, 1500, 20);
+        this.addWall(-10, 500, 20, 1000);
+        this.addWall(1510, 500, 20, 1000);
+      }
+
+      createPlayerAndCamera() {
+        this.player = this.physics.add.sprite(750, 860, this.playerId).setDepth(40).setCollideWorldBounds(true);
+        this.player.body.setSize(15, 17).setOffset(5, 13);
+        this.physics.add.collider(this.player, this.walls);
+        this.cameras.main.setBounds(0, 0, 1500, 1000);
+        this.cameras.main.startFollow(this.player, true, .1, .1);
+        this.cameras.main.setRoundPixels(true);
+        this.physics.world.setBounds(0, 0, 1500, 1000);
+      }
+
+      createGlampingObjectives() {
+        [[160, 820], [300, 850], [440, 820]].forEach(([x, y], index) => this.addInteractable(x, y, 'bag-icon', `CARRY BAG ${index + 1} TO THE TENT`, (item) => {
+          if (this.state.bags >= 3) return;
+          item.disableBody(true, true);
+          this.state.bags += 1;
+          this.adjustHarmony(2);
+          this.say(charName(this.playerId), [
+            ['This bag is books. Megan has brought portable walls.', 'This bag is snacks. I recognize its sacred weight.', 'This bag contains enough clothing to survive a minor change in climate.'][index]
+          ], () => this.updateObjective());
+        }, { bob: true }));
+
+        this.addInteractable(560, 720, 'stamp-icon', 'ASSIGN THE SLEEPING SPACES', (item) => {
+          if (this.state.bags < 3) return this.say('Megan', ['The luggage should enter the accommodations before we begin negotiating ownership of them.']);
+          if (this.state.beds) return;
+          this.state.beds = true;
+          item.disableBody(true, true);
+          this.say('Cora', ['I made a bed chart. Appeals are accepted in writing and discarded alphabetically.'], () => this.updateObjective());
+        }, { bob: true });
+
+        this.addInteractable(760, 570, 'food-icon', 'PREPARE DINNER', (item) => {
+          if (!this.state.beds) return this.say('Renee', ['Beds first, dinner second. We are preserving the illusion of civilization.']);
+          if (this.state.dinner) return;
+          this.state.dinner = true;
+          item.disableBody(true, true);
+          this.say('Renee', ['Dinner is served. Mike gave it a full toast before anyone was allowed to eat.', 'The potatoes received a surprisingly moving tribute.'], () => this.updateObjective());
+        }, { bob: true });
+
+        this.addInteractable(1160, 650, 'star-icon', 'BEGIN STARGAZING', (item) => {
+          if (!this.state.dinner) return this.say('Mae', ['Looking at stars while hungry is just astronomy with resentment.']);
+          if (this.state.stars) return;
+          this.state.stars = true;
+          item.disableBody(true, true);
+          this.cameras.main.flash(220, 70, 70, 110);
+          this.say('Megan', [`No screens. Just stars, quiet, and ${charName(this.playerId)} whispering incorrect constellation names.`, 'Mike has named one after himself. He\u2019s taking write-in votes.'], () => this.updateObjective());
+        }, { bob: true });
+
+        this.addInteractable(1360, 260, 'hat', 'INVESTIGATE THE NIGHTTIME NOISE', (item) => {
+          if (!this.state.stars) return this.say('Kennedy', ['The mysterious noise has not started yet. Give nature a moment to organize.']);
+          if (this.state.noise) return;
+          this.state.noise = true;
+          item.disableBody(true, true);
+          this.say('Mae', ['Mystery solved. It was Mike looking for his shoes.', 'Nature has once again been unfairly accused.'], () => {
+            this.finishChapter('GLAMPING: NATURE WITH PLUMBING', 'Campground', [
+              `Luggage delivered: ${this.state.bags}/3`,
+              `Fireflies found: ${this.state.fireflies}/5`
+            ], 'Everyone slept indoors while describing the experience as wilderness.');
+          });
+        }, { bob: true });
+
+        [[620, 260], [880, 300], [180, 590], [1320, 600], [760, 340]].forEach(([x, y]) => this.addInteractable(x, y, 'firefly', 'CATCH A FIREFLY PHOTO', (item) => {
+          item.disableBody(true, true);
+          this.state.fireflies += 1;
+          this.adjustHarmony(1);
+          this.cameras.main.flash(80, 255, 243, 163);
+          this.say(this.playerId === 'mackenzie' ? 'Kennedy' : 'Mackenzie', [`Firefly ${this.state.fireflies} photographed. I am winning nature.`, `${charName(this.playerId)} has photographed darkness twice and called it artistic.`], () => this.updateObjective());
+        }, { bob: true }));
+      }
+
+      updateObjective() {
+        let line;
+        if (this.state.bags < 3) line = `1. MOVE LUGGAGE TO THE TENT (${this.state.bags}/3)`;
+        else if (!this.state.beds) line = '2. ASSIGN THE SLEEPING SPACES';
+        else if (!this.state.dinner) line = '3. PREPARE DINNER';
+        else if (!this.state.stars) line = '4. GO STARGAZING';
+        else line = '5. INVESTIGATE THE NIGHTTIME NOISE';
+        this.setObjective(`${line}\n\nSIDE QUEST: FIREFLY PHOTOS ${this.state.fireflies}/5`);
+      }
+
+      update() {
+        const pressed = this.actionPressed();
+        this.updateWalkingPlayer(pressed, 185);
+      }
+    }
+
+    class CampgroundScene extends AdventureScene {
+      constructor() { super('Campground'); }
+
+      create() {
+        this.setupAdventure({ title: 'CHAPTER 5 · CAMPGROUND', worldW: 1550, worldH: 1000 });
+        this.state = { parked: false, power: false, water: false, fire: false, quiet: false, marshmallows: 0 };
+        this.drawCampground();
+        this.createCampgroundPlayer();
+        this.createCampgroundObjectives();
+        this.updateObjective();
+        this.time.delayedCall(350, () => this.say('Megan', [
+          'The campsite is directly behind us. Please back in slowly.',
+          'Seven people will now give you eight incompatible directions.'
+        ]));
+      }
+
+      drawCampground() {
+        const g = this.add.graphics();
+        g.fillStyle(0x587e49, 1).fillRect(0, 0, 1550, 1000);
+        g.fillStyle(0x8d857d, 1).fillRoundedRect(0, 650, 1550, 210, 70);
+        g.fillStyle(0xc5b28d, 1).fillRoundedRect(980, 270, 420, 330, 30);
+        g.lineStyle(5, 0xf7f1dc, .7).strokeRect(1030, 330, 300, 190);
+        g.fillStyle(0x5f91aa, 1).fillEllipse(360, 250, 360, 220);
+        g.fillStyle(0x6d4d34, 1).fillRect(300, 530, 170, 24).fillRect(330, 490, 110, 24);
+        g.fillStyle(0x30261f, 1).fillCircle(720, 420, 55);
+        for (let i = 0; i < 24; i++) {
+          const x = 60 + (i * 151) % 1450;
+          const y = 80 + (i * 97) % 770;
+          if (x > 930 && y > 230 && y < 620) continue;
+          g.fillStyle(0x355e3b, 1).fillCircle(x, y, 35);
+          g.fillStyle(0x735039, 1).fillRect(x - 7, y + 24, 14, 38);
+        }
+        this.addWall(360, 250, 340, 200);
+        this.addWall(775, -10, 1550, 20);
+        this.addWall(775, 1010, 1550, 20);
+        this.addWall(-10, 500, 20, 1000);
+        this.addWall(1560, 500, 20, 1000);
+      }
+
+      createCampgroundPlayer() {
+        this.player = this.physics.add.sprite(760, 820, 'rv-small').setDepth(40).setCollideWorldBounds(true);
+        this.player.body.setSize(44, 72).setOffset(10, 12);
+        this.physics.add.collider(this.player, this.walls);
+        this.cameras.main.setBounds(0, 0, 1550, 1000);
+        this.cameras.main.startFollow(this.player, true, .1, .1);
+        this.cameras.main.setRoundPixels(true);
+        this.physics.world.setBounds(0, 0, 1550, 1000);
+      }
+
+      createCampgroundObjectives() {
+        this.parkingZone = this.addInteractable(1180, 430, 'sign-icon', 'PARK THE RV IN THE CAMPSITE', (item) => {
+          if (this.state.parked) return;
+          this.state.parked = true;
+          item.disableBody(true, true);
+          this.player.setTexture(this.playerId).setScale(1).setPosition(1080, 580).setAngle(0);
+          this.player.body.setSize(15, 17).setOffset(5, 13);
+          this.adjustHarmony(4);
+          this.say('Renee', ['The RV is parked.', 'It is technically inside the campsite, which is the standard we are choosing.'], () => this.updateObjective());
+        }, { bob: true });
+
+        this.addInteractable(1360, 500, 'power-icon', 'CONNECT CAMPGROUND POWER', (item) => {
+          if (!this.state.parked) return this.say('Megan', ['Park first. Electricity is not a tow cable.']);
+          if (this.state.power) return;
+          this.state.power = true;
+          item.disableBody(true, true);
+          this.say(charName(this.playerId), ['Power connected. The air conditioner has resumed its role as family mediator.'], () => this.updateObjective());
+        }, { bob: true });
+
+        this.addInteractable(1000, 530, 'water-icon', 'CONNECT THE WATER HOSE', (item) => {
+          if (!this.state.power) return this.say('Megan', ['Power first, then water.', 'Mike has prepared a twelve-minute explanation of why. Nobody asked, but he\u2019s treating it like a debate stage.']);
+          if (this.state.water) return;
+          this.state.water = true;
+          item.disableBody(true, true);
+          this.say('Mae', [`Water connected. Nothing sprayed ${charName(this.playerId)} in the face.`, 'This is therefore our least cinematic success.'], () => this.updateObjective());
+        }, { bob: true });
+
+        this.addInteractable(720, 420, 'fire-icon', 'BUILD THE CAMPFIRE', (item) => {
+          if (!this.state.water) return this.say('Renee', ['Finish the hookups before creating an additional emergency.']);
+          if (this.state.fire) return;
+          this.state.fire = true;
+          item.disableBody(true, true);
+          this.say(this.playerId === 'mackenzie' ? 'Kennedy' : 'Mackenzie', ['Fire built. I claim first marshmallow and final authority over roasting.', `${charName(this.playerId)} may assist by standing where the smoke is blowing.`], () => this.updateObjective());
+        }, { bob: true });
+
+        this.addInteractable(1120, 640, 'rest-icon', 'BEGIN QUIET HOURS', () => {
+          if (!this.state.fire) return this.say('Cora', ['Quiet hours cannot begin until everyone has made one final loud request.']);
+          if (this.state.quiet) return;
+          this.state.quiet = true;
+          this.say('Mae', ['Quiet hours have begun.', `${charName(this.playerId)} is opening a bag of chips with the volume of a structural collapse.`, 'Mike has responded with a passionate, fully unnecessary speech about it.'], () => {
+            this.finishChapter('CAMPGROUND OF THE DAMNED', 'Zoo', [
+              `Marshmallows recovered: ${this.state.marshmallows}/3`,
+              'RV position: proudly, mostly straight'
+            ], 'The campground survived. The neighboring campers have learned several family names.');
+          });
+        }, { width: 120, height: 100 });
+
+        [[190, 520], [560, 720], [1420, 170]].forEach(([x, y], index) => this.addInteractable(x, y, 'marshmallow', `RECOVER STOLEN MARSHMALLOW ${index + 1}`, (item) => {
+          if (!this.state.parked) return this.say(charName(this.playerId), ['The raccoon side plot begins after parking. Even chaos respects pacing.']);
+          item.disableBody(true, true);
+          this.state.marshmallows += 1;
+          this.adjustHarmony(2);
+          this.say(charName(this.playerId), [`Marshmallow ${this.state.marshmallows} recovered. The raccoon’s legal team has been notified.`], () => this.updateObjective());
+        }, { bob: true }));
+      }
+
+      updateObjective() {
+        let line;
+        if (!this.state.parked) line = '1. BACK THE RV INTO THE CAMPSITE';
+        else if (!this.state.power) line = '2. CONNECT CAMPGROUND POWER';
+        else if (!this.state.water) line = '3. CONNECT THE WATER HOSE';
+        else if (!this.state.fire) line = '4. BUILD THE CAMPFIRE';
+        else line = '5. SURVIVE QUIET HOURS';
+        this.setObjective(`${line}\n\nSIDE QUEST: STOLEN MARSHMALLOWS ${this.state.marshmallows}/3`);
+      }
+
+      update() {
+        const pressed = this.actionPressed();
+        if (this.dialogueOpen) {
+          this.player.setVelocity(0);
+          if (pressed) this.advanceDialogue();
+          return;
+        }
+        const speed = this.state.parked ? 185 : 145;
+        const velocity = this.movementVector(speed);
+        this.player.setVelocity(velocity.x, velocity.y);
+        if (!this.state.parked) {
+          this.player.setAngle(velocity.x * .05);
+        } else {
+          this.player.setFlipX(velocity.x < 0);
+          this.player.rotation = velocity.lengthSq() > 0 ? Math.sin(this.time.now / 75) * .035 : 0;
+        }
+        this.findNearestInteractable(this.state.parked ? 82 : 115);
+        if (pressed && this.currentInteractable) this.currentInteractable.interact();
+      }
+    }
+
+    class ZooScene extends AdventureScene {
+      constructor() { super('Zoo'); }
+
+      create() {
+        this.setupAdventure({ title: 'CHAPTER 6 · COLUMBUS ZOO', worldW: 1800, worldH: 1200 });
+        this.state = { map: false, stamps: new Set(), fed: false, backpack: false, giftShop: false, photos: 0 };
+        this.drawZoo();
+        this.createZooPlayer();
+        this.createZooObjectives();
+        this.updateObjective();
+        this.time.delayedCall(350, () => this.say('Cora', [
+          'We need a route, a meeting point, and a firm gift-shop policy.',
+          'The adults have produced none of these, so I will proceed.'
+        ]));
+      }
+
+      drawZoo() {
+        const g = this.add.graphics();
+        g.fillStyle(0x79a85e, 1).fillRect(0, 0, 1800, 1200);
+        g.fillStyle(0xd1bd8e, 1).fillRoundedRect(80, 520, 1640, 160, 70);
+        g.fillRoundedRect(820, 80, 160, 1040, 70);
+        const zones = [
+          [120, 100, 550, 350, 0x5f91aa, 'AQUATIC'],
+          [1130, 100, 550, 350, 0xd2a85d, 'SAVANNA'],
+          [120, 760, 550, 330, 0x4d8050, 'FOREST'],
+          [1130, 760, 550, 330, 0x8a6f9d, 'ADVENTURE']
+        ];
+        zones.forEach(([x, y, w, h, color, label]) => {
+          g.fillStyle(color, .86).fillRoundedRect(x, y, w, h, 35);
+          pixelText(this, x + 22, y + 22, label, 20, '#f7f1dc').setDepth(2);
+        });
+        g.fillStyle(0xddd4c5, 1).fillRect(720, 1020, 360, 150);
+        g.fillStyle(0x553d48, 1).fillRect(695, 990, 410, 45);
+        pixelText(this, 790, 1065, 'GIFT SHOP', 22, '#385b7a').setDepth(2);
+        g.fillStyle(0xddd4c5, 1).fillRect(720, 30, 360, 130);
+        pixelText(this, 785, 70, 'ENTRANCE', 22, '#385b7a').setDepth(2);
+        this.addWall(900, 1090, 360, 150);
+        this.addWall(900, 95, 360, 130);
+        this.addWall(900, -10, 1800, 20);
+        this.addWall(900, 1210, 1800, 20);
+        this.addWall(-10, 600, 20, 1200);
+        this.addWall(1810, 600, 20, 1200);
+      }
+
+      createZooPlayer() {
+        this.player = this.physics.add.sprite(900, 210, this.playerId).setDepth(40).setCollideWorldBounds(true);
+        this.player.body.setSize(15, 17).setOffset(5, 13);
+        this.physics.add.collider(this.player, this.walls);
+        this.cameras.main.setBounds(0, 0, 1800, 1200);
+        this.cameras.main.startFollow(this.player, true, .1, .1);
+        this.cameras.main.setRoundPixels(true);
+        this.physics.world.setBounds(0, 0, 1800, 1200);
+      }
+
+      createZooObjectives() {
+        this.addInteractable(900, 180, 'stamp-icon', 'PICK UP THE ZOO MAP', (item) => {
+          if (this.state.map) return;
+          this.state.map = true;
+          item.disableBody(true, true);
+          this.say('Megan', ['Map acquired. We will now ignore it selectively and with confidence.'], () => this.updateObjective());
+        }, { bob: true });
+
+        const regions = [
+          ['Aquatic', 380, 300],
+          ['Savanna', 1420, 300],
+          ['Forest', 380, 900],
+          ['Adventure', 1420, 900]
+        ];
+        regions.forEach(([name, x, y]) => this.addInteractable(x, y, 'stamp-icon', `COLLECT THE ${String(name).toUpperCase()} STAMP`, (item) => {
+          if (!this.state.map) return this.say('Cora', ['We need the map first. Even rebellion benefits from documentation.']);
+          if (this.state.stamps.has(name)) return;
+          this.state.stamps.add(name);
+          item.disableBody(true, true);
+          this.adjustHarmony(2);
+          this.say('Kennedy', [`${name} stamp collected. We have officially experienced this entire continent-sized section.`], () => this.updateObjective());
+        }, { bob: true }));
+
+        this.addInteractable(1450, 520, 'giraffe', 'COMPLETE THE GIRAFFE FEEDING', (item) => {
+          if (this.state.stamps.size < 4) return this.say('Megan', ['Finish the four regions before adding giraffe saliva to the itinerary.']);
+          if (this.state.fed) return;
+          this.state.fed = true;
+          this.cameras.main.flash(120, 255, 243, 190);
+          const cupHolder = this.playerId === 'mackenzie' ? 'Jerad' : charName(this.playerId);
+          this.say('Mackenzie', ['The giraffe ate from my hand. I am now ranked above everyone else.', `${cupHolder} held the empty cup and still managed to look nervous.`, 'Mike asked the giraffe if it wanted to say a few words. It left instead.'], () => this.updateObjective());
+        });
+
+        this.addInteractable(240, 620, 'backpack', 'RECOVER THE LOST BACKPACK', (item) => {
+          if (!this.state.fed) return this.say('Mae', ['The backpack has not been narratively lost yet. Please respect the sequence.']);
+          if (this.state.backpack) return;
+          this.state.backpack = true;
+          item.disableBody(true, true);
+          this.say('Cora', ['Backpack recovered. It was exactly where an adult said it definitely was not.'], () => this.updateObjective());
+        }, { bob: true });
+
+        this.addInteractable(900, 985, 'souvenir', 'ENTER THE GIFT SHOP', () => {
+          if (!this.state.backpack) return this.say('Megan', ['Nobody enters the gift shop while a backpack is missing. We cannot afford two financial emergencies.']);
+          if (this.state.giftShop) return;
+          this.state.giftShop = true;
+          const hatCulprit = this.playerId === 'megan' ? 'Jerad' : charName(this.playerId);
+          this.say('Megan', [
+            'Each child may choose one reasonably priced souvenir.',
+            `${hatCulprit}, the novelty giraffe hat is not a family necessity.`,
+            'Mike, a commemorative campaign button is not a thing.',
+            'Everyone else, please stop encouraging him by calling it an exhibit.'
+          ], () => {
+            this.finishChapter('THE COLUMBUS ZOO MARATHON', 'Homeward', [
+              `Region stamps: ${this.state.stamps.size}/4`,
+              `Family photos: ${this.state.photos}/3`
+            ], 'The family escaped the gift shop with only moderate financial damage.');
+          });
+        }, { width: 180, height: 110 });
+
+        [[640, 470], [1160, 700], [900, 840]].forEach(([x, y], index) => this.addInteractable(x, y, 'camera-icon', `TAKE FAMILY PHOTO ${index + 1}`, (item) => {
+          item.disableBody(true, true);
+          this.state.photos += 1;
+          this.adjustHarmony(1);
+          this.cameras.main.flash(130, 255, 255, 235);
+          this.say(charName(this.playerId), [
+            ['Photo one: seven smiles and one person blinking with purpose.', 'Photo two: the children look organized. The adults look recently informed.', 'Photo three: everyone is visible. This is our artistic peak.'][index]
+          ], () => this.updateObjective());
+        }, { bob: true }));
+      }
+
+      updateObjective() {
+        let line;
+        if (!this.state.map) line = '1. PICK UP THE ZOO MAP';
+        else if (this.state.stamps.size < 4) line = `2. COLLECT FOUR REGION STAMPS (${this.state.stamps.size}/4)`;
+        else if (!this.state.fed) line = '3. COMPLETE THE GIRAFFE FEEDING';
+        else if (!this.state.backpack) line = '4. RECOVER THE LOST BACKPACK';
+        else line = '5. SURVIVE THE GIFT SHOP';
+        this.setObjective(`${line}\n\nSIDE QUEST: FAMILY PHOTOS ${this.state.photos}/3`);
+      }
+
+      update() {
+        const pressed = this.actionPressed();
+        this.updateWalkingPlayer(pressed, 190);
+      }
+    }
+
+    class HomewardScene extends AdventureScene {
+      constructor() { super('Homeward'); }
+
+      create() {
+        this.setupAdventure({ title: 'CHAPTER 7 · THE DRIVE HOME', worldW: 960, worldH: 4100 });
+        this.startY = 3900;
+        this.finishY = 235;
+        this.routeIndex = 0;
+        this.keepsakes = 0;
+        this.hitCooldown = 0;
+        this.speedPenaltyUntil = 0;
+        this.ending = false;
+        this.autoSpeed = 215 * this.playerData.mods.driveSpeedMult;
+        this.routeEvents = [
+          { y: 3480, texture: 'sign-icon', speaker: 'Megan', lines: ['Columbus is behind us. Milwaukee is ahead.', 'Mike has estimated our arrival time using traffic, weather, and the confidence of a man who is not driving.'], label: 'LEAVE COLUMBUS' },
+          { y: 2600, texture: 'power-icon', speaker: this.playerId === 'mae' ? 'Cora' : 'Mae', lines: ['Mike has identified the dashboard light using a process called guessing in a confident voice.', 'It resembles a tiny orange horseshoe, which is apparently enough evidence.'], label: 'DASHBOARD LIGHT' },
+          { y: 1650, texture: 'star-icon', speaker: this.playerId === 'renee' ? 'Megan' : 'Renee', lines: ['The storm is getting heavier.', 'Mike has offered a calming speech. We have chosen the rain.'], label: 'STORM FRONT' },
+          { y: 760, texture: 'sign-icon', speaker: this.playerId === 'mackenzie' ? 'Kennedy' : 'Mackenzie', lines: ['Wisconsin!', `${charName(this.playerId)} says ${this.playerId === 'jerad' ? 'he\u2019ll' : 'they\u2019ll'} unpack immediately. I would like that statement entered into evidence.`], label: 'GREEN HOME ZONE' }
+        ];
+        this.drawHomeRoad();
+        this.createDriver();
+        this.createHomeObjects();
+        this.createDrivingGuide({
+          finishLabel: 'GREEN HOME ZONE',
+          collectibleLabel: 'GOLD KEEPSAKES',
+          finishColor: '#77e08d'
+        });
+        this.updateObjective();
+        const narrator = this.playerId === 'mackenzie' ? 'Kennedy' : 'Mackenzie';
+        const skill = this.playerData.mods.driveSkill;
+        const experienceCallback = skill < 1
+          ? 'Still no license, still our little secret.'
+          : skill > 1
+            ? 'Still got the license. Still slightly showing off.'
+            : 'Still got the license. Same level of reassurance as before.';
+        this.time.delayedCall(350, () => this.say(narrator, [
+          `${charName(this.playerId)}, same rules going home: the RV moves forward automatically, so just steer left and right.`,
+          'Gold keepsake icons are optional. Cars, cones, and potholes are not collectibles, regardless of your earlier strategy.',
+          'Reach 100% and cross the big green HOME ZONE. Arrival happens automatically.',
+          experienceCallback
+        ]));
+      }
+
+      drawHomeRoad() {
+        const g = this.add.graphics();
+        g.fillStyle(0x304a3b, 1).fillRect(0, 0, 960, 4100);
+        g.fillStyle(0x454650, 1).fillRect(180, 0, 600, 4100);
+        g.fillStyle(0x6f7078, 1).fillRect(160, 0, 20, 4100).fillRect(780, 0, 20, 4100);
+        g.fillStyle(0xc9c4b8, 1);
+        for (let y = 0; y < 4100; y += 90) {
+          g.fillRect(375, y, 10, 50);
+          g.fillRect(575, y, 10, 50);
+        }
+        g.fillStyle(0xf4c95d, 1).fillRect(190, 0, 7, 4100).fillRect(763, 0, 7, 4100);
+        g.fillStyle(0x263747, .32);
+        for (let y = 300; y < 3600; y += 500) g.fillRect(180, y, 600, 240);
+        for (let i = 0; i < 38; i++) {
+          const x = 20 + (i * 173) % 920;
+          const y = 50 + (i * 211) % 3900;
+          if (x > 150 && x < 810) continue;
+          g.fillStyle(0x355e3b, 1).fillCircle(x, y, 34);
+          g.fillStyle(0x735039, 1).fillRect(x - 6, y + 24, 12, 38);
+        }
+        g.fillStyle(0x347b4b, .96).fillRect(180, 145, 600, 190);
+        g.fillStyle(0x77e08d, 1).fillRect(180, 310, 600, 18);
+        g.fillStyle(0xf7f1dc, 1);
+        for (let x = 235; x <= 675; x += 110) {
+          g.fillTriangle(x, 290, x + 38, 240, x + 76, 290);
+          g.fillRect(x + 34, 283, 8, 32);
+        }
+        pixelText(this, 480, 180, 'GREEN HOME ZONE', 26, '#77e08d').setOrigin(.5).setDepth(3);
+        pixelText(this, 480, 216, 'CROSS TO ARRIVE AUTOMATICALLY', 14, '#f7f1dc').setOrigin(.5).setDepth(3);
+        g.fillStyle(0xd8d1be, 1).fillRect(250, 35, 460, 105);
+        g.fillStyle(0x355e3b, 1).fillRect(268, 50, 424, 74);
+        pixelText(this, 480, 68, 'WELCOME HOME\nMILWAUKEE', 21, '#f7f1dc').setOrigin(.5).setDepth(3);
+        this.addWall(145, 2050, 25, 4100);
+        this.addWall(815, 2050, 25, 4100);
+      }
+
+      createDriver() {
+        this.player = this.physics.add.sprite(480, this.startY, 'rv-small').setDepth(40).setCollideWorldBounds(true);
+        this.player.body.setSize(44, 72).setOffset(10, 12);
+        this.physics.add.collider(this.player, this.walls);
+        this.cameras.main.setBounds(0, 0, 960, 4100);
+        this.cameras.main.startFollow(this.player, true, .08, .08);
+        this.cameras.main.setRoundPixels(true);
+        this.physics.world.setBounds(0, 0, 960, 4100);
+      }
+
+      createHomeObjects() {
+        this.routeEvents.forEach((event) => {
+          this.add.image(480, event.y, event.texture).setDepth(18).setAlpha(.6).setScale(1.1);
+          pixelText(this, 520, event.y - 8, event.label, 12, '#f7f1dc').setDepth(18).setAlpha(.72);
+        });
+
+        this.pickups = this.physics.add.group({ allowGravity: false, immovable: true });
+        const pickupData = [
+          { x: 270, y: 3180, line: `The family photo is safe. ${charName(this.playerId)} is still making that face.` },
+          { x: 680, y: 1920, line: 'The zoo magnet survived. The refrigerator will now be forced to remember Ohio.' },
+          { x: 300, y: 930, line: 'The final keepsake is secure. Nobody ask what it cost.' }
+        ];
+        pickupData.forEach((data, index) => {
+          const glow = this.add.circle(data.x, data.y, 30, 0xf4c95d, .18).setDepth(23);
+          const label = pixelText(this, data.x, data.y - 36, 'OPTIONAL +HARMONY', 10, '#f4c95d').setOrigin(.5).setDepth(24);
+          const item = this.physics.add.sprite(data.x, data.y, 'souvenir').setDepth(25).setImmovable(true).setTint(0xffdf72);
+          item.body.setAllowGravity(false);
+          item.setData('index', index);
+          item.setData('line', data.line);
+          item.setData('glow', glow);
+          item.setData('label', label);
+          this.pickups.add(item);
+          this.tweens.add({ targets: [item, glow], scale: 1.13, duration: 520, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        });
+        this.physics.add.overlap(this.player, this.pickups, this.collectKeepsake, null, this);
+
+        const obstacles = [
+          [340, 3650, 'pothole'], [620, 3370, 'car'], [470, 3040, 'cone'],
+          [330, 2720, 'pothole'], [620, 2360, 'car'], [440, 2000, 'pothole'],
+          [660, 1510, 'cone'], [350, 1130, 'car'], [540, 590, 'pothole']
+        ];
+        this.obstacles = this.physics.add.staticGroup();
+        obstacles.forEach(([x, y, key]) => {
+          const obstacle = this.physics.add.staticSprite(x, y, key).setDepth(25);
+          this.obstacles.add(obstacle);
+        });
+        this.physics.add.overlap(this.player, this.obstacles, this.hitRoadObstacle, null, this);
+      }
+
+      collectKeepsake(player, item) {
+        if (!item.active) return;
+        const line = item.getData('line');
+        item.getData('glow')?.destroy();
+        item.getData('label')?.destroy();
+        item.disableBody(true, true);
+        this.keepsakes += 1;
+        this.adjustHarmony(2);
+        this.updateObjective();
+        this.say('Megan', [line, 'Mike has already declared it a family treasure and given it a short toast.']);
+      }
+
+      hitRoadObstacle(player, obstacle) {
+        const now = this.time.now;
+        if (now < this.hitCooldown || this.ending) return;
+        const mods = this.playerData.mods;
+        this.hitCooldown = now + 750 + mods.obstacleForgiveMs;
+        if (mods.neverBackDown) {
+          this.speedPenaltyUntil = 0;
+          this.autoSpeedBoostUntil = now + 900;
+          this.adjustHarmony(-2);
+        } else {
+          this.speedPenaltyUntil = now + 650;
+          this.adjustHarmony(-4);
+        }
+        this.cameras.main.shake(120, .006);
+        this.player.setTint(0xe76f51);
+        this.time.delayedCall(170, () => this.player?.clearTint());
+        const push = this.player.x <= obstacle.x ? -38 : 38;
+        this.player.x = Phaser.Math.Clamp(this.player.x + push, 205, 755);
+      }
+
+      triggerRouteEvent() {
+        if (this.routeIndex >= this.routeEvents.length || this.dialogueOpen || this.ending) return;
+        const event = this.routeEvents[this.routeIndex];
+        if (this.player.y > event.y) return;
+        this.routeIndex += 1;
+        this.adjustHarmony(1);
+        this.updateObjective();
+        this.say(event.speaker, event.lines);
+      }
+
+      beginAutomaticArrival() {
+        if (this.ending) return;
+        this.ending = true;
+        this.player.setVelocity(0);
+        this.player.body.enable = false;
+        this.promptBg.setVisible(false);
+        this.promptText.setVisible(false);
+        this.setObjective('FINISH REACHED: GREEN HOME ZONE\n\nArriving automatically · keepsakes were optional.');
+        const arrivalText = pixelText(this, GAME_W / 2, 220, 'HOME… SOMEHOW', 28, '#f4c95d')
+          .setOrigin(.5).setScrollFactor(0).setDepth(340);
+        this.tweens.add({ targets: arrivalText, alpha: .35, duration: 300, yoyo: true, repeat: 2 });
+        this.tweens.add({
+          targets: this.player,
+          x: 480,
+          y: 105,
+          angle: 0,
+          duration: 1050,
+          ease: 'Sine.easeInOut',
+          onComplete: () => this.finishChapter('THE DRIVE HOME', 'Finale', [
+            `Keepsakes rescued: ${this.keepsakes}/3`,
+            `Route milestones passed: ${this.routeIndex}/${this.routeEvents.length}`,
+            `Final harmony: ${this.familyHarmony}%`
+          ], 'The RV arrived automatically. The family will eventually remember only the funny parts.')
+        });
+      }
+
+      updateObjective() {
+        if (!this.player) return;
+        const progress = Phaser.Math.Clamp((this.startY - this.player.y) / (this.startY - this.finishY), 0, 1);
+        const percent = Math.floor(progress * 100);
+        const next = this.routeEvents[this.routeIndex]?.label || 'GREEN HOME ZONE';
+        const text = `GOAL: REACH GREEN HOME ZONE  ${percent}%\nNEXT LANDMARK: ${next}\n\nGOLD KEEPSAKES: ${this.keepsakes}/3 OPTIONAL`;
+        if (text !== this.lastObjectiveText) {
+          this.lastObjectiveText = text;
+          this.setObjective(text);
+          this.updateDrivingGuide(progress);
+        }
+      }
+
+      update(time) {
+        const pressed = this.actionPressed();
+        if (this.dialogueOpen) {
+          this.player.setVelocity(0);
+          if (pressed) this.advanceDialogue();
+          return;
+        }
+        if (this.ending) return;
+        this.applyChillRegen();
+
+        const left = Boolean(this.cursors.left?.isDown || this.keys.left?.isDown || touchState.left);
+        const right = Boolean(this.cursors.right?.isDown || this.keys.right?.isDown || touchState.right);
+        const horizontal = (right ? 1 : 0) - (left ? 1 : 0);
+        const boosted = this.autoSpeedBoostUntil && time < this.autoSpeedBoostUntil;
+        const forwardSpeed = boosted ? this.autoSpeed * 1.35
+          : time < this.speedPenaltyUntil ? this.autoSpeed * .52
+          : this.autoSpeed;
+        this.player.setVelocity(horizontal * 245 * this.playerData.mods.driveSkill, -forwardSpeed);
+        this.player.setAngle(horizontal * 4);
+
+        this.triggerRouteEvent();
+        this.updateObjective();
+        if (this.player.y <= this.finishY) this.beginAutomaticArrival();
+      }
+    }
+
+
+    class ChapterCompleteScene extends Phaser.Scene {
+      constructor() { super('ChapterComplete'); }
+
+      init(data = {}) {
+        this.results = {
+          chapterTitle: data.chapterTitle || 'CHAPTER COMPLETE',
+          nextScene: data.nextScene || 'Milwaukee',
+          harmony: Number.isFinite(data.harmony) ? data.harmony : 72,
+          character: CHARACTERS[data.character] ? data.character : 'jerad',
+          stats: Array.isArray(data.stats) ? data.stats : [],
+          caption: data.caption || ''
+        };
+      }
+
+      create() {
+        ensureTripTextures(this);
+        this.ready = false;
+        this.cameras.main.setBackgroundColor('#15131f');
+        const g = this.add.graphics();
+        g.fillStyle(0x262237, 1).fillRect(0, 0, GAME_W, GAME_H);
+        g.fillStyle(0x403e49, 1).fillRect(0, 345, GAME_W, 195);
+        g.fillStyle(0xf4c95d, 1);
+        for (let x = 0; x < GAME_W; x += 115) g.fillRect(x, 430, 65, 8);
+
+        g.fillStyle(COLORS.rv, 1).fillRect(355, 280, 250, 100);
+        g.fillStyle(COLORS.rvBlue, 1).fillRect(375, 300, 65, 38).fillRect(460, 300, 55, 38).fillRect(535, 300, 48, 38);
+        g.fillStyle(0x24212c, 1).fillCircle(420, 385, 27).fillCircle(555, 385, 27);
+        g.fillStyle(0x8f8a98, 1).fillCircle(420, 385, 11).fillCircle(555, 385, 11);
+
+        pixelText(this, GAME_W / 2, 50, 'CHAPTER COMPLETE', 38, '#f4c95d').setOrigin(.5);
+        pixelText(this, GAME_W / 2, 104, this.results.chapterTitle, 22, '#78d6c6').setOrigin(.5);
+        pixelText(this, GAME_W / 2, 126, `PLAYING AS ${CHARACTERS[this.results.character].name.toUpperCase()}`, 11, '#a59bb8').setOrigin(.5);
+
+        const rating = this.results.harmony >= 88 ? 'ALMOST SUSPICIOUSLY COMPETENT'
+          : this.results.harmony >= 68 ? 'MOSTLY ACCORDING TO PLAN'
+          : this.results.harmony >= 42 ? 'NOBODY WAS PERMANENTLY LOST'
+          : 'THE RENTAL COMPANY HAS QUESTIONS';
+
+        pixelText(this, GAME_W / 2, 150, `FAMILY HARMONY: ${this.results.harmony}%`, 17, '#f7f1dc').setOrigin(.5);
+        this.results.stats.slice(0, 3).forEach((stat, index) => {
+          pixelText(this, GAME_W / 2, 184 + index * 27, stat, 15, '#f7f1dc').setOrigin(.5);
+        });
+        if (this.results.caption) {
+          pixelText(this, GAME_W / 2, 260, this.results.caption, 13, '#c7bfd8')
+            .setOrigin(.5).setAlign('center').setWordWrapWidth(650);
+        }
+        pixelText(this, GAME_W / 2, 472, rating, 18, '#ffffff').setOrigin(.5);
+        this.continueLabel = pixelText(this, GAME_W / 2, 510, '[ A / TAP TO CONTINUE ]', 14, '#c7bfd8').setOrigin(.5);
+        this.tweens.add({ targets: this.continueLabel, alpha: .4, duration: 700, yoyo: true, repeat: -1 });
+
+        const continueTrip = () => {
+          if (!this.ready) return;
+          this.ready = false;
+          touchState.interactPressed = false;
+          this.scene.start(this.results.nextScene, { harmony: this.results.harmony, character: this.results.character });
+        };
+        this.continueTrip = continueTrip;
+        if (this.input.keyboard) {
+          this.input.keyboard.once('keydown-SPACE', continueTrip);
+          this.input.keyboard.once('keydown-ENTER', continueTrip);
+          this.input.keyboard.once('keydown-E', continueTrip);
+        }
+        this.input.on('pointerdown', continueTrip);
+        this.time.delayedCall(450, () => { this.ready = true; });
+      }
+
+      update() {
+        if (touchState.interactPressed) {
+          touchState.interactPressed = false;
+          this.continueTrip();
+        }
+      }
+    }
+
+    class FinaleScene extends Phaser.Scene {
+      constructor() { super('Finale'); }
+
+      init(data = {}) {
+        this.harmony = Number.isFinite(data.harmony) ? data.harmony : 72;
+        this.character = CHARACTERS[data.character] ? data.character : 'jerad';
+      }
+
+      create() {
+        this.ready = false;
+        const g = this.add.graphics();
+        g.fillStyle(0x17131d, 1).fillRect(0, 0, GAME_W, GAME_H);
+        const stripes = [0x3a3550, 0x5a4660, 0x85576a, 0xc27b68];
+        stripes.forEach((color, index) => g.fillStyle(color, 1).fillRect(0, 35 + index * 45, GAME_W, 46));
+        g.fillStyle(0x403e49, 1).fillRect(0, 330, GAME_W, 210);
+        g.fillStyle(0xf4c95d, 1);
+        for (let x = 0; x < GAME_W; x += 105) g.fillRect(x, 425, 58, 8);
+        g.fillStyle(COLORS.rv, 1).fillRect(310, 255, 340, 135);
+        g.fillStyle(COLORS.rvBlue, 1).fillRect(335, 280, 90, 45).fillRect(445, 280, 75, 45).fillRect(545, 280, 75, 45);
+        g.fillStyle(0x24212c, 1).fillCircle(390, 397, 34).fillCircle(575, 397, 34);
+        g.fillStyle(0x8f8a98, 1).fillCircle(390, 397, 14).fillCircle(575, 397, 14);
+
+        pixelText(this, GAME_W / 2, 48, 'THE FAMILY MADE IT HOME', 36, '#f4c95d').setOrigin(.5);
+        pixelText(this, GAME_W / 2, 102, 'RV THERE YET?', 24, '#78d6c6').setOrigin(.5);
+        pixelText(this, GAME_W / 2, 150,
+          'Milwaukee → The Wilds → Glamping → Campground → Columbus Zoo → Milwaukee',
+          13, '#f7f1dc').setOrigin(.5);
+
+        const ending = this.harmony >= 88 ? 'LEGENDARY FAMILY VACATION'
+          : this.harmony >= 68 ? 'MOSTLY ACCORDING TO PLAN'
+          : this.harmony >= 42 ? 'WE WILL LAUGH ABOUT THIS SOMEDAY'
+          : 'MEGAN IS PLANNING THE NEXT TRIP ALONE';
+
+        pixelText(this, GAME_W / 2, 195, `FINAL FAMILY HARMONY: ${this.harmony}%`, 18, '#ffffff').setOrigin(.5);
+        pixelText(this, GAME_W / 2, 225, ending, 20, '#f4c95d').setOrigin(.5);
+        pixelText(this, GAME_W / 2, 250, `YOU DROVE THIS ONE AS ${CHARACTERS[this.character].name.toUpperCase()}`, 11, '#a59bb8').setOrigin(.5);
+        pixelText(this, GAME_W / 2, 455,
+          'Everyone survived. The RV survived in the broad legal sense.\nThe children will remember the animals. The adults will remember the receipts.',
+          14, '#f7f1dc').setOrigin(.5).setAlign('center');
+        const replay = pixelText(this, GAME_W / 2, 515, '[ A / TAP TO START ANOTHER BAD IDEA ]', 13, '#c7bfd8').setOrigin(.5);
+        this.tweens.add({ targets: replay, alpha: .4, duration: 700, yoyo: true, repeat: -1 });
+
+        const restart = () => {
+          if (!this.ready) return;
+          this.ready = false;
+          touchState.interactPressed = false;
+          this.scene.start('CharacterSelect');
+        };
+        this.restart = restart;
+        if (this.input.keyboard) {
+          this.input.keyboard.once('keydown-SPACE', restart);
+          this.input.keyboard.once('keydown-ENTER', restart);
+          this.input.keyboard.once('keydown-E', restart);
+        }
+        this.input.on('pointerdown', restart);
+        this.time.delayedCall(450, () => { this.ready = true; });
+      }
+
+      update() {
+        if (touchState.interactPressed) {
+          touchState.interactPressed = false;
+          this.restart();
+        }
+      }
+    }
+
+
+    const config = {
+      type: Phaser.AUTO,
+      parent: 'game',
+      width: GAME_W,
+      height: GAME_H,
+      pixelArt: true,
+      roundPixels: true,
+      backgroundColor: '#15131f',
+      scale: {
+        mode: Phaser.Scale.FIT,
+        autoCenter: Phaser.Scale.CENTER_BOTH,
+        width: GAME_W,
+        height: GAME_H
+      },
+      physics: {
+        default: 'arcade',
+        arcade: {
+          gravity: { y: 0 },
+          debug: false
+        }
+      },
+      scene: [TitleScene, CharacterSelectScene, MilwaukeeScene, HighwayScene, WildsScene, GlampingScene, CampgroundScene, ZooScene, HomewardScene, ChapterCompleteScene, FinaleScene]
+    };
+
+    installTouchControls();
+
+    if (!window.Phaser) {
+      document.getElementById('loading').innerHTML = '<div><strong>PHASER FAILED TO LOAD</strong><br><br>Check your internet connection, then reload the page.</div>';
+      return;
+    }
+
+    gameInstance = new Phaser.Game(config);
+    scheduleViewportFit(260);
+  })();
+  </script>
+</body>
+</html>
