@@ -607,6 +607,17 @@
     // (raw.githubusercontent.com) rather than embedded as base64.
     const TITLE_LOGO_URL = 'https://raw.githubusercontent.com/Jadednikon/RV-There-Yet-Game/refs/heads/main/van-summerin-badge.png';
 
+    // Chapter 1 pet-quest cat portraits \u2014 one distinct tabby per cat,
+    // hosted the same way. Dogs keep their generated Graphics texture since
+    // there are only two of them and they weren't part of this pass.
+    const CAT_SPRITE_URLS = {
+      fred:   'https://raw.githubusercontent.com/Jadednikon/RV-There-Yet-Game/refs/heads/main/cat-fred.png',
+      george: 'https://raw.githubusercontent.com/Jadednikon/RV-There-Yet-Game/refs/heads/main/cat-george.png',
+      rosie:  'https://raw.githubusercontent.com/Jadednikon/RV-There-Yet-Game/refs/heads/main/cat-rosie.png',
+      gus:    'https://raw.githubusercontent.com/Jadednikon/RV-There-Yet-Game/refs/heads/main/cat-gus.png',
+      ginny:  'https://raw.githubusercontent.com/Jadednikon/RV-There-Yet-Game/refs/heads/main/cat-ginny.png'
+    };
+
     const MUSIC_FILES = {
       main: 'https://raw.githubusercontent.com/Jadednikon/RV-There-Yet-Game/refs/heads/main/Cartridge%20Highway.mp3',
       highway: 'https://raw.githubusercontent.com/Jadednikon/RV-There-Yet-Game/refs/heads/main/Rainbow%20Drift.mp3',
@@ -915,6 +926,7 @@
       constructor() { super('Title'); }
 
       preload() {
+        this.load.crossOrigin = 'anonymous';
         this.load.image('titleLogo', TITLE_LOGO_URL);
         this.load.on('loaderror', (file) => {
           if (file.key === 'titleLogo') {
@@ -1134,6 +1146,18 @@
 
     class MilwaukeeScene extends Phaser.Scene {
       constructor() { super('Milwaukee'); }
+
+      preload() {
+        this.load.crossOrigin = 'anonymous';
+        Object.entries(CAT_SPRITE_URLS).forEach(([id, url]) => {
+          this.load.image(`pet-${id}`, url);
+        });
+        this.load.on('loaderror', (file) => {
+          if (file.key.startsWith('pet-') && CAT_SPRITE_URLS[file.key.slice(4)]) {
+            console.warn(`[${file.key}] Could not load cat portrait from ${file.src}. Falling back to the generic cat sprite.`);
+          }
+        });
+      }
 
       init(data = {}) {
         this.playerId = CHARACTERS[data.character] ? data.character : 'jerad';
@@ -1526,8 +1550,11 @@
       // Jerad leave until he's been properly fussed over twice.
       createPetFarewellQuest() {
         PETS.forEach((pet) => {
-          const texture = pet.species === 'dog' ? 'pet-dog' : 'pet-cat';
+          const catTexture = `pet-${pet.id}`;
+          const hasCatPortrait = pet.species === 'cat' && this.textures.exists(catTexture);
+          const texture = pet.species === 'dog' ? 'pet-dog' : (hasCatPortrait ? catTexture : 'pet-cat');
           const sprite = this.physics.add.staticSprite(pet.x, pet.y, texture).setDepth(16);
+          if (hasCatPortrait) sprite.setDisplaySize(34, 36);
           sprite.prompt = `PET ${pet.name.toUpperCase()} GOODBYE`;
           const label = pixelText(this, pet.x, pet.y - 22, pet.name.toUpperCase(), 10, '#f7f1dc').setOrigin(0.5).setDepth(17);
           this.tweens.add({ targets: [sprite, label], y: '-=4', duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
