@@ -334,7 +334,7 @@
       </div>
     </section>
 
-    <footer id="footer">A Steinfeld–VanSomeron family vacation simulator. No actual RV security deposits were harmed.</footer>
+    <footer id="footer">A Steinfeld–VanSomeren family vacation simulator. No actual RV security deposits were harmed.</footer>
   </main>
 
   <aside id="rotate-device" aria-live="polite">
@@ -397,13 +397,13 @@
         mods: { harmonyLossMult: 0.8, harmonyGainMult: 1.0, driveSpeedMult: 1.0, driveSkill: 1.1, obstacleForgiveMs: 150, interactBonus: -4, itinerary: true }
       },
       renee: {
-        id: 'renee', name: 'Renee VanSomeron', family: 'VanSomeron',
+        id: 'renee', name: 'Renee VanSomeren', family: 'VanSomeren',
         ability: 'Chill Aura', abilityDesc: 'Gradually restores Family Harmony and improves cooperation from NPCs.',
         personality: 'Calm enough to make everyone else briefly question why they\u2019re panicking.',
         mods: { harmonyLossMult: 0.85, harmonyGainMult: 1.15, driveSpeedMult: 1.0, driveSkill: 1.05, obstacleForgiveMs: 120, interactBonus: 4, chillRegen: true }
       },
       mike: {
-        id: 'mike', name: 'Mike VanSomeron', family: 'VanSomeron',
+        id: 'mike', name: 'Mike VanSomeren', family: 'VanSomeren',
         ability: 'Counsel and Carry', abilityDesc: 'Moves heavy objects and charms officials into cooperating.',
         personality: 'Former athlete, lawyer, politician, and current source of several avoidable situations.',
         mods: { harmonyLossMult: 1.0, harmonyGainMult: 1.0, driveSpeedMult: 0.92, driveSkill: 1.05, obstacleForgiveMs: 250, interactBonus: -10, counsel: true }
@@ -421,13 +421,13 @@
         mods: { harmonyLossMult: 0.9, harmonyGainMult: 1.0, driveSpeedMult: 1.0, driveSkill: 0.85, obstacleForgiveMs: 0, interactBonus: 24, deadpan: true }
       },
       mackenzie: {
-        id: 'mackenzie', name: 'Mackenzie VanSomeron', family: 'VanSomeron',
+        id: 'mackenzie', name: 'Mackenzie VanSomeren', family: 'VanSomeren',
         ability: 'Never Back Down', abilityDesc: 'Gains speed and strength after failing a mini-game.',
         personality: 'Every activity becomes a competition, whether anyone agreed to compete or not.',
         mods: { harmonyLossMult: 1.05, harmonyGainMult: 1.0, driveSpeedMult: 1.0, driveSkill: 0.85, obstacleForgiveMs: 0, interactBonus: 12, neverBackDown: true }
       },
       kennedy: {
-        id: 'kennedy', name: 'Kennedy VanSomeron', family: 'VanSomeron',
+        id: 'kennedy', name: 'Kennedy VanSomeren', family: 'VanSomeren',
         ability: 'Trailblazer', abilityDesc: 'Climbs, explores shortcuts, and discovers hidden areas.',
         personality: 'Straightforward, adventurous, and usually halfway into the woods before the adults notice.',
         mods: { harmonyLossMult: 1.0, harmonyGainMult: 1.0, driveSpeedMult: 1.08, driveSkill: 0.85, obstacleForgiveMs: 0, interactBonus: 28, trailblazer: true }
@@ -603,6 +603,10 @@
     // renders immediately rather than waiting on ~10MB of audio to
     // download before the player can even see a menu.
     // ---------------------------------------------------------------------
+    // Title screen badge logo, hosted the same way as the music tracks
+    // (raw.githubusercontent.com) rather than embedded as base64.
+    const TITLE_LOGO_URL = 'https://raw.githubusercontent.com/Jadednikon/RV-There-Yet-Game/refs/heads/main/van-summerin-badge.png';
+
     const MUSIC_FILES = {
       main: 'https://raw.githubusercontent.com/Jadednikon/RV-There-Yet-Game/refs/heads/main/Cartridge%20Highway.mp3',
       highway: 'https://raw.githubusercontent.com/Jadednikon/RV-There-Yet-Game/refs/heads/main/Rainbow%20Drift.mp3',
@@ -910,17 +914,33 @@
     class TitleScene extends Phaser.Scene {
       constructor() { super('Title'); }
 
+      preload() {
+        this.load.image('titleLogo', TITLE_LOGO_URL);
+        this.load.on('loaderror', (file) => {
+          if (file.key === 'titleLogo') {
+            console.warn(`[titleLogo] Could not load badge image from ${TITLE_LOGO_URL}. Title screen will render without it.`);
+          }
+        });
+      }
+
       create() {
         document.getElementById('loading').style.display = 'none';
         this.cameras.main.setBackgroundColor('#15131f');
         this.makeTitleArt();
+
+        if (this.textures.exists('titleLogo')) {
+          this.add.image(GAME_W / 2, 274, 'titleLogo')
+            .setDisplaySize(190, 210)
+            .setDepth(5);
+        }
+
         playMusic(this, 'main');
 
         const title = pixelText(this, GAME_W / 2, 95, 'RV THERE YET?', 48, '#f4c95d')
           .setOrigin(0.5)
           .setShadow(6, 6, '#000000', 0, false, true);
 
-        pixelText(this, GAME_W / 2, 148, 'THE STEINFELD–VANSOMERON FAMILY VACATION INCIDENT', 16, '#78d6c6')
+        pixelText(this, GAME_W / 2, 148, 'THE STEINFELD–VANSOMEREN FAMILY VACATION INCIDENT', 16, '#78d6c6')
           .setOrigin(0.5);
 
         const save = loadSave();
@@ -948,13 +968,13 @@
 
         if (save) {
           const savedName = CHARACTERS[save.character] ? CHARACTERS[save.character].name : 'someone';
-          const start = pixelText(this, GAME_W / 2, 375, '[ CONTINUE YOUR TRIP ]', 24, '#ffffff')
+          const start = pixelText(this, GAME_W / 2, 395, '[ CONTINUE YOUR TRIP ]', 24, '#ffffff')
             .setOrigin(0.5)
             .setInteractive({ useHandCursor: true });
-          pixelText(this, GAME_W / 2, 407, `PICK UP AS ${savedName.toUpperCase()} \u00B7 TRIP TOTAL SO FAR: ${save.cumulativeScore || 0}`, 12, '#9fe1cb')
+          pixelText(this, GAME_W / 2, 427, `PICK UP AS ${savedName.toUpperCase()} \u00B7 TRIP TOTAL SO FAR: ${save.cumulativeScore || 0}`, 12, '#9fe1cb')
             .setOrigin(0.5);
 
-          const newTrip = pixelText(this, GAME_W / 2, 440, '[ OR START A NEW TRIP ]', 15, '#c7bfd8')
+          const newTrip = pixelText(this, GAME_W / 2, 460, '[ OR START A NEW TRIP ]', 15, '#c7bfd8')
             .setOrigin(0.5)
             .setInteractive({ useHandCursor: true });
 
@@ -967,19 +987,19 @@
             this.input.keyboard.once('keydown-E', guard(continueTrip));
           }
 
-          pixelText(this, GAME_W / 2, 480, 'FULL ROAD-TRIP EDITION · CHOOSE YOUR TRAVELER', 12, '#a59bb8')
+          pixelText(this, GAME_W / 2, 500, 'FULL ROAD-TRIP EDITION · CHOOSE YOUR TRAVELER', 12, '#a59bb8')
             .setOrigin(0.5);
           return;
         }
 
-        const start = pixelText(this, GAME_W / 2, 400, '[ HIT THE ROAD ]', 24, '#ffffff')
+        const start = pixelText(this, GAME_W / 2, 420, '[ HIT THE ROAD ]', 24, '#ffffff')
           .setOrigin(0.5)
           .setInteractive({ useHandCursor: true });
 
-        pixelText(this, GAME_W / 2, 445, 'TOUCH PAD / WASD TO MOVE  ·  A / E TO INTERACT', 13, '#c7bfd8')
+        pixelText(this, GAME_W / 2, 465, 'TOUCH PAD / WASD TO MOVE  ·  A / E TO INTERACT', 13, '#c7bfd8')
           .setOrigin(0.5);
 
-        pixelText(this, GAME_W / 2, 480, 'FULL ROAD-TRIP EDITION · CHOOSE YOUR TRAVELER', 12, '#a59bb8')
+        pixelText(this, GAME_W / 2, 500, 'FULL ROAD-TRIP EDITION · CHOOSE YOUR TRAVELER', 12, '#a59bb8')
           .setOrigin(0.5);
 
         this.tweens.add({
@@ -1006,36 +1026,13 @@
         const g = this.add.graphics();
         g.fillStyle(0x262237, 1).fillRect(0, 0, GAME_W, GAME_H);
 
-        // Sunset stripes.
+        // Sunset stripes behind the title text.
         const stripes = [0x614b66, 0x8d5c68, 0xc26f61, 0xe49c67];
         stripes.forEach((c, i) => g.fillStyle(c, 1).fillRect(0, 30 + i * 35, GAME_W, 36));
 
-        // Road.
-        g.fillStyle(0x403e49, 1).fillRect(0, 280, GAME_W, 170);
-        g.fillStyle(0xf4c95d, 1);
-        for (let x = 0; x < GAME_W; x += 100) g.fillRect(x, 360, 55, 8);
-
-        // RV silhouette.
-        g.fillStyle(COLORS.rv, 1).fillRect(270, 220, 430, 140);
-        g.fillStyle(COLORS.rvBlue, 1).fillRect(300, 245, 130, 55);
-        g.fillRect(455, 245, 100, 55);
-        g.fillRect(580, 245, 85, 55);
-        g.fillStyle(0x2d2936, 1).fillRect(650, 305, 50, 55);
-        g.fillStyle(0xf4c95d, 1).fillRect(278, 310, 25, 12);
-        g.fillStyle(0x17131d, 1);
-        g.fillCircle(365, 365, 38).fillCircle(610, 365, 38);
-        g.fillStyle(0x85818d, 1);
-        g.fillCircle(365, 365, 16).fillCircle(610, 365, 16);
-
-        // Family-shaped blobs inside windows. A deliberately tiny sitcom tableau.
-        const heads = [0x3b261d, 0xe4c58b, 0xefd08d, 0x8a653e, 0x553425, 0x4a2a20, 0xe2c078, 0xe6c781];
-        heads.forEach((c, i) => {
-          const row = i < 4 ? 0 : 1;
-          const col = i % 4;
-          const px = 320 + col * 82;
-          const py = 260 + row * 38;
-          g.fillStyle(c, 1).fillCircle(px, py, 9);
-        });
+        // A soft ground shadow beneath where the badge sits, so it doesn't
+        // look like it's floating on nothing.
+        g.fillStyle(0x1a1824, 1).fillEllipse(GAME_W / 2, 382, 170, 20);
       }
     }
 
@@ -2849,12 +2846,12 @@ CARS · CONES · POTHOLES: DODGE`, 11, '#f7f1dc')
         ]));
       }
 
-      // Beds are split by family: Steinfelds in the left tent, VanSomerons
+      // Beds are split by family: Steinfelds in the left tent, VanSomerens
       // in the right. Each non-player family member gets a fixed slot;
       // beds only become deliverable once the chart exists (Cora's line).
       createGlampingFamily() {
         const steinfeldBeds = [[250, 560], [320, 596], [400, 596], [470, 560]];
-        const vansomeronBeds = [[1000, 560], [1070, 596], [1150, 596], [1220, 560]];
+        const vansomerenBeds = [[1000, 560], [1070, 596], [1150, 596], [1220, 560]];
         let sIdx = 0;
         let vIdx = 0;
 
@@ -2905,7 +2902,7 @@ CARS · CONES · POTHOLES: DODGE`, 11, '#f7f1dc')
 
         const configs = data.map((cfg) => {
           const family = CHARACTERS[cfg.key].family;
-          const slot = family === 'Steinfeld' ? steinfeldBeds[sIdx++] : vansomeronBeds[vIdx++];
+          const slot = family === 'Steinfeld' ? steinfeldBeds[sIdx++] : vansomerenBeds[vIdx++];
           return { ...cfg, bedX: slot[0], bedY: slot[1] };
         });
 
